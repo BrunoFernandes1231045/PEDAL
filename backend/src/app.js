@@ -7,6 +7,7 @@ const trainersRouter = require('./routes/trainers');
 const stationsRouter = require('./routes/stations');
 const needsRouter = require('./routes/needs');
 const contactRequestsRouter = require('./routes/contactRequests');
+const dashboardRouter = require('./routes/dashboard');
 
 const app = express();
 app.use(cors());
@@ -20,5 +21,6 @@ app.use('/api/trainers', trainersRouter);
 app.use('/api/stations', stationsRouter);
 app.use('/api/needs', needsRouter);
 app.use('/api/contact-requests', contactRequestsRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 module.exports = app;
