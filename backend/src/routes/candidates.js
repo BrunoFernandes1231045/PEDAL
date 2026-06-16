@@ -49,7 +49,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Proibido' });
   }
   const { data, error } = await supabase
-    .from('candidates').eq('id', id).single();
+    .from('candidates').select('*').eq('id', id).single();
   if (error) return res.status(404).json({ error: 'Não encontrado' });
   res.json(data);
 });
@@ -63,7 +63,7 @@ router.patch('/:id/formalize', requireAuth, async (req, res) => {
   const { data, error } = await supabase
     .from('candidates')
     .update({ nif, signature, stage: 'ativo', updated_at: new Date() })
-    .eq('id', req.params.id).single();
+    .eq('id', req.params.id).select().single();
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
@@ -78,7 +78,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   const { data, error } = await supabase
     .from('candidates')
     .update({ ...req.body, updated_at: new Date() })
-    .eq('id', id).single();
+    .eq('id', id).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });

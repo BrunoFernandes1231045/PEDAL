@@ -17,6 +17,15 @@ const request = require('supertest');
 const app = require('../../src/app');
 const supabase = require('../../src/db/supabase');
 
+beforeEach(() => {
+  const chain = supabase.from();
+  chain.select.mockReset().mockReturnThis();
+  chain.insert.mockReset().mockReturnThis();
+  chain.update.mockReset().mockReturnThis();
+  chain.eq.mockReset().mockReturnThis();
+  chain.single.mockReset();
+});
+
 describe('POST /api/candidates', () => {
   it('creates candidate and auth user, returns 201', async () => {
     supabase.auth.admin.createUser.mockResolvedValue({
