@@ -4,6 +4,7 @@ const candidatesRouter = require('./routes/candidates');
 const messagesRouter = require('./routes/messages');
 const onboardingRouter = require('./routes/onboarding');
 const trainersRouter = require('./routes/trainers');
+const stationsRouter = require('./routes/stations');
 
 const app = express();
 app.use(cors());
@@ -14,5 +15,6 @@ app.use('/api/candidates', candidatesRouter);
 app.use('/api/candidates/:id/messages', messagesRouter);
 app.use('/api/candidates/:id/onboarding', onboardingRouter);
 app.use('/api/trainers', trainersRouter);
+app.use('/api/stations', stationsRouter);
 
 module.exports = app;
