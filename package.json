@@ -1,0 +1,9 @@
+{
+  "name": "pedal",
+  "private": true,
+  "scripts": {
+    "backend": "cd backend && npm run dev",
+    "test:backend": "cd backend && npm test",
+    "install:backend": "cd backend && npm install"
+  }
+}
