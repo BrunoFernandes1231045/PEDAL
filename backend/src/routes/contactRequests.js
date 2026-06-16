@@ -11,6 +11,9 @@ router.get('/', requireAuth, requireCoordinator, async (req, res) => {
 });
 
 router.post('/', requireAuth, async (req, res) => {
+  if (req.user.role === 'coordinator') {
+    return res.status(403).json({ error: 'Coordenadores não podem submeter dúvidas' });
+  }
   const { candidate_id, question, module_id } = req.body;
   if (!question) return res.status(400).json({ error: 'question é obrigatório' });
   const { data, error } = await supabase

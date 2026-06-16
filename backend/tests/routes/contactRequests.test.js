@@ -8,8 +8,12 @@ jest.mock('../../src/db/supabase', () => {
   };
   return { from: jest.fn(() => chain) };
 });
+let mockUser = { id: 'coord-1', role: 'coordinator' };
 jest.mock('../../src/middleware/auth', () => ({
-  requireAuth: (req, res, next) => { req.user = { id: 'coord-1', role: 'coordinator' }; next(); },
+  requireAuth: (req, res, next) => {
+    req.user = mockUser;
+    next();
+  },
   requireCoordinator: (req, res, next) => next(),
 }));
 
@@ -31,6 +35,7 @@ describe('GET /api/contact-requests', () => {
     supabase.from().eq.mockResolvedValue({
       data: [{ id: 'cr-1', status: 'pending' }], error: null,
     });
+    mockUser = { id: 'coord-1', role: 'coordinator' };
     const res = await request(app)
       .get('/api/contact-requests').set('Authorization', 'Bearer valid-token');
     expect(res.status).toBe(200);
@@ -39,6 +44,10 @@ describe('GET /api/contact-requests', () => {
 });
 
 describe('POST /api/contact-requests', () => {
+  beforeEach(() => {
+    mockUser = { id: 'cand-1', role: 'candidate' };
+  });
+
   it('creates request and returns 201', async () => {
     supabase.from().single.mockResolvedValue({
       data: { id: 'cr-2', status: 'pending' }, error: null,

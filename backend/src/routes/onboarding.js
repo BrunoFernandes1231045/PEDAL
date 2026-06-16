@@ -16,6 +16,9 @@ router.get('/', requireAuth, async (req, res) => {
 
 router.patch('/progress/:moduleId', requireAuth, async (req, res) => {
   const { id, moduleId } = req.params;
+  if (req.user.role !== 'coordinator' && req.user.id !== id) {
+    return res.status(403).json({ error: 'Proibido' });
+  }
   const { completed } = req.body;
   const completed_at = completed ? new Date() : null;
 
