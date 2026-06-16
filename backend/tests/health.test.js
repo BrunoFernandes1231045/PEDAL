@@ -1,3 +1,8 @@
+jest.mock('../src/db/supabase', () => ({
+  from: jest.fn(),
+  auth: { admin: { createUser: jest.fn() } },
+}));
+
 const request = require('supertest');
 const app = require('../src/app');
 
