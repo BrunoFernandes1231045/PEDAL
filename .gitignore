@@ -1,0 +1,3 @@
+backend/.env.development
+backend/.env.production
+node_modules/
