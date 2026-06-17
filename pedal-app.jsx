@@ -17,6 +17,7 @@ const INITIAL = {
   overrides: {},    // { [candidateId]: stage } — decisões da coordenação sobre candidatos seed
   trainers: (window.PEDAL && window.PEDAL.SEED_TRAINERS || []).map((t) => ({ ...t })),
   contactRequests: (window.PEDAL && window.PEDAL.SEED_CONTACTS || []).map((c) => ({ ...c })),
+  candidateId: null,        // ID do candidato no backend (Supabase)
   account: null,            // { email, password, createdAt } — criada após a inscrição
   session: { authed: false },// sessão ativa no agente (login)
   signature: null,          // dataURL da rubrica do piloto (formalização)
@@ -52,6 +53,20 @@ function App() {
   const [scale, setScale] = useStateA(1);
 
   useEffectA(() => { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }, [S]);
+
+  // Quando o candidato se regista, cria-o também no backend (não-bloqueante)
+  useEffectA(() => {
+    if (S.account && !S.candidateId && S.candidate.name && S.candidate.email) {
+      fetch('http://localhost:3001/api/candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email }),
+      })
+        .then((r) => r.json())
+        .then((data) => { if (data.id) setS((p) => ({ ...p, candidateId: data.id })); })
+        .catch(() => {});
+    }
+  }, [S.account]);
 
   useEffectA(() => {
     if (view !== 'candidate') { setScale(1); return; }

@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "backend": "cd backend && npm run dev",
+    "frontend": "npx serve . --listen 3000",
     "test:backend": "cd backend && npm test",
     "install:backend": "cd backend && npm install"
   }
