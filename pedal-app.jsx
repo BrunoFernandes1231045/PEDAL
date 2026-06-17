@@ -60,7 +60,7 @@ function App() {
       fetch('http://localhost:3001/api/candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email }),
+        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null }),
       })
         .then((r) => r.json())
         .then((data) => { if (data.id) setS((p) => ({ ...p, candidateId: data.id })); })
