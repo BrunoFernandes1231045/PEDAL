@@ -34,7 +34,8 @@ function Dashboard({ store }) {
     stage: S.stage, source: 'Agente PEDAL', days: 0, initials: (S.candidate.name || 'N C').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase(), live: true,
     periods: S.candidate.periods, weekdays: [], interview: S.candidate.interview, contact: S.candidate.contact, email: S.candidate.email, dob: S.candidate.dob, nif: S.candidate.nif, contactDate: '',
   } : null;
-  const candidates = [...(live ? [live] : []), ...P.SEED_CANDIDATES.map((c) => ({ ...c, stage: S.overrides[c.id] || c.stage, localityId: (P.LOCALITIES.find((l) => l.name === c.locality) || {}).id }))];
+  const seedList = P.SEED_CANDIDATES.map((c) => ({ ...c, stage: S.overrides[c.id] || c.stage, localityId: (P.LOCALITIES.find((l) => l.name === c.locality) || {}).id }));
+  const candidates = [...(live ? [live] : []), ...(store.realCandidates !== null ? store.realCandidates : seedList)];
 
   function validate(c) {
     if (c.live) { store.up({ validated: true }); store.setStage('onboarding'); }

@@ -52,6 +52,7 @@ function App() {
   const [resetKey, setResetKey] = useStateA(0);
   const [scale, setScale] = useStateA(1);
   const [coordJwt, setCoordJwtRaw] = useStateA(null); // não persiste no localStorage
+  const [realCandidates, setRealCandidates] = useStateA(null);
 
   useEffectA(() => { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }, [S]);
 
@@ -128,7 +129,25 @@ function App() {
   const changePassword = (password) => setS((p) => ({ ...p, account: { ...(p.account || {}), password } }));
   const setModuleContent = (id, patch) => setS((p) => ({ ...p, moduleContent: { ...p.moduleContent, [id]: { ...(p.moduleContent[id] || {}), ...patch } } }));
   const setCoordJwt = (jwt) => setCoordJwtRaw(jwt);
-  const clearCoordJwt = () => setCoordJwtRaw(null);
+  const clearCoordJwt = () => { setCoordJwtRaw(null); setRealCandidates(null); };
+
+  useEffectA(() => {
+    if (!coordJwt) { setRealCandidates(null); return; }
+    fetch('http://localhost:3001/api/candidates', {
+      headers: { 'Authorization': `Bearer ${coordJwt}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        setRealCandidates(data.map((c) => {
+          const parts = (c.name || '').split(' ');
+          const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
+          const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
+          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', stage: c.stage || 'inscricao', locality: '—', localityId: null, initials, days, source: 'PEDAL', periods: [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
+        }));
+      })
+      .catch(() => {});
+  }, [coordJwt]);
 
   // — Fase 4: locais de encontro, utilizadores de gestão e perfil da coordenação —
   const addStation = (st) => setS((p) => ({ ...p, stations: [...(p.stations || []), { id: 'st' + Math.random().toString(36).slice(2, 8), ...st }] }));
@@ -142,7 +161,7 @@ function App() {
   const removeNeed = (id) => setS((p) => ({ ...p, needs: (p.needs || []).filter((n) => n.id !== id) }));
   const reset = () => { localStorage.removeItem(STORE_KEY); setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, trainers: INITIAL.trainers.map((t) => ({ ...t })), contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, moduleContent: {}, stations: INITIAL.stations.map((s) => ({ ...s })), mgmtUsers: INITIAL.mgmtUsers.map((u) => ({ ...u })), needs: INITIAL.needs.map((n) => ({ ...n })), coordProfile: { ...INITIAL.coordProfile }, moduleConversations: {} }); setResetKey((k) => k + 1); };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, realCandidates };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;
