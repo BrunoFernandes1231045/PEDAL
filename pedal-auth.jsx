@@ -280,4 +280,60 @@ function ProfRow({ label, value, last }) {
   );
 }
 
-Object.assign(window, { AuthGate, ProfileView, LoginPanel });
+function CoordLoginScreen({ store }) {
+  const [email, setEmail] = useStateAu('');
+  const [pw, setPw] = useStateAu('');
+  const [err, setErr] = useStateAu('');
+  const [loading, setLoading] = useStateAu(false);
+
+  const SUPABASE_URL = 'https://mamvckyoqrjhivffimob.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM';
+
+  const handleLogin = async () => {
+    if (!email || !pw) return;
+    setLoading(true); setErr('');
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ email, password: pw }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error_description || 'Credenciais inválidas'); return; }
+      if (data.user?.user_metadata?.role !== 'coordinator') { setErr('Esta conta não tem acesso à coordenação'); return; }
+      store.setCoordJwt(data.access_token);
+    } catch (e) {
+      setErr('Erro de ligação ao servidor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 20 }}>
+      <div style={{ width: 360, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 28, boxShadow: '0 4px 24px rgba(0,0,0,.08)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24, gap: 8 }}>
+          <div className="pedal-authlogo"><img src={window.__PEDAL_LOGO} alt="" style={{ width: 52 }} /></div>
+          <div style={{ font: '800 18px var(--display)', color: 'var(--ink)', marginTop: 4 }}>Coordenação</div>
+          <div style={{ font: '500 13px var(--ui)', color: 'var(--ink-soft)' }}>Pedalar Sem Idade Porto</div>
+        </div>
+        {err && <div className="pedal-autherr" style={{ marginBottom: 14 }}><Icon name="alert" size={14} />{err}</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Email</div>
+            <input className="pedal-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="coordenador@pedal.pt" />
+          </div>
+          <div>
+            <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Palavra-passe</div>
+            <input className="pedal-input" type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && handleLogin()} />
+          </div>
+          <button className="pedal-btn primary" style={{ width: '100%', marginTop: 4 }} onClick={handleLogin} disabled={loading || !email || !pw}>
+            {loading ? 'A entrar…' : 'Entrar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { AuthGate, ProfileView, LoginPanel, CoordLoginScreen });

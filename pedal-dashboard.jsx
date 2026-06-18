@@ -147,7 +147,7 @@ function CoordProfileMenu({ store, onClose, onOpenModal }) {
         <div style={{ display: 'grid', gap: 4 }}>
           <button onClick={() => onOpenModal('edit')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, font: '700 13px var(--ui)', color: 'var(--ink)', width: '100%', textAlign: 'left' }}><Icon name="user" size={15} color="var(--primary)" />Editar telefone / email</button>
           <button onClick={() => onOpenModal('pw')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, font: '700 13px var(--ui)', color: 'var(--ink)', width: '100%', textAlign: 'left' }}><Icon name="lock" size={15} color="var(--primary)" />Mudar palavra-passe</button>
-          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, font: '700 13px var(--ui)', color: 'var(--accent-deep)', width: '100%', textAlign: 'left', background: 'var(--accent-soft)' }}><Icon name="arrow" size={15} />Terminar sessão</button>
+          <button onClick={() => { store.clearCoordJwt(); onClose(); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, font: '700 13px var(--ui)', color: 'var(--accent-deep)', width: '100%', textAlign: 'left', background: 'var(--accent-soft)' }}><Icon name="arrow" size={15} />Terminar sessão</button>
         </div>
       </div>
     </>

@@ -51,6 +51,7 @@ function App() {
   const [view, setView] = useStateA('candidate');
   const [resetKey, setResetKey] = useStateA(0);
   const [scale, setScale] = useStateA(1);
+  const [coordJwt, setCoordJwtRaw] = useStateA(null); // não persiste no localStorage
 
   useEffectA(() => { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }, [S]);
 
@@ -126,6 +127,9 @@ function App() {
   const setSession = (authed) => setS((p) => ({ ...p, session: { ...p.session, authed } }));
   const changePassword = (password) => setS((p) => ({ ...p, account: { ...(p.account || {}), password } }));
   const setModuleContent = (id, patch) => setS((p) => ({ ...p, moduleContent: { ...p.moduleContent, [id]: { ...(p.moduleContent[id] || {}), ...patch } } }));
+  const setCoordJwt = (jwt) => setCoordJwtRaw(jwt);
+  const clearCoordJwt = () => setCoordJwtRaw(null);
+
   // — Fase 4: locais de encontro, utilizadores de gestão e perfil da coordenação —
   const addStation = (st) => setS((p) => ({ ...p, stations: [...(p.stations || []), { id: 'st' + Math.random().toString(36).slice(2, 8), ...st }] }));
   const updateStation = (id, patch) => setS((p) => ({ ...p, stations: (p.stations || []).map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
@@ -138,7 +142,7 @@ function App() {
   const removeNeed = (id) => setS((p) => ({ ...p, needs: (p.needs || []).filter((n) => n.id !== id) }));
   const reset = () => { localStorage.removeItem(STORE_KEY); setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, trainers: INITIAL.trainers.map((t) => ({ ...t })), contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, moduleContent: {}, stations: INITIAL.stations.map((s) => ({ ...s })), mgmtUsers: INITIAL.mgmtUsers.map((u) => ({ ...u })), needs: INITIAL.needs.map((n) => ({ ...n })), coordProfile: { ...INITIAL.coordProfile }, moduleConversations: {} }); setResetKey((k) => k + 1); };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;
@@ -197,8 +201,10 @@ function App() {
             </IOSDevice>
           </div>
         </div>
-      ) : (
+      ) : coordJwt ? (
         <div className="pedal-dashwrap"><Dashboard store={store} /></div>
+      ) : (
+        <CoordLoginScreen store={store} />
       )}
 
       <TweaksPanel>
