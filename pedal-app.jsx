@@ -5,7 +5,7 @@ const { useState: useStateA, useEffect: useEffectA } = React;
 const STORE_KEY = 'pedal_v3';
 const INITIAL = {
   stage: null,
-  candidate: { name: '', contact: '', email: '', dob: '', locality: '', localities: [], periods: [], interview: {} },
+  candidate: { name: '', contact: '', email: '', dob: '', cc: '', locality: '', localities: [], periods: [], interview: {} },
   messages: [],
   onboarding: { done: {}, roleAccepted: false },
   notifs: [],
@@ -53,8 +53,22 @@ function App() {
   const [scale, setScale] = useStateA(1);
   const [coordJwt, setCoordJwtRaw] = useStateA(null); // não persiste no localStorage
   const [realCandidates, setRealCandidates] = useStateA(null);
+  const [candidateJwt, setCandidateJwtRaw] = useStateA(null);
 
   useEffectA(() => { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }, [S]);
+
+  // Re-autentica na carga da página se já tem credenciais guardadas mas não tem JWT
+  useEffectA(() => {
+    if (!S.account?.email || !S.account?.password || candidateJwt) return;
+    fetch('https://mamvckyoqrjhivffimob.supabase.co/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM' },
+      body: JSON.stringify({ email: S.account.email, password: S.account.password }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d.access_token) { console.log('[PEDAL] re-auth ok'); setCandidateJwtRaw(d.access_token); } else { console.log('[PEDAL] re-auth falhou:', d.error); } })
+      .catch(() => {});
+  }, []); // só na montagem
 
   // Quando o candidato se regista, cria-o também no backend (não-bloqueante)
   useEffectA(() => {
@@ -62,10 +76,22 @@ function App() {
       fetch('http://localhost:3001/api/candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null }),
+        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null, cc: S.candidate.cc || null, password: S.account.password }),
       })
         .then((r) => r.json())
-        .then((data) => { if (data.id) setS((p) => ({ ...p, candidateId: data.id })); })
+        .then(async (data) => {
+          if (!data.id) return;
+          setS((p) => ({ ...p, candidateId: data.id }));
+          try {
+            const authRes = await fetch('https://mamvckyoqrjhivffimob.supabase.co/auth/v1/token?grant_type=password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM' },
+              body: JSON.stringify({ email: S.candidate.email, password: S.account.password }),
+            });
+            const authData = await authRes.json();
+            if (authData.access_token) setCandidateJwtRaw(authData.access_token);
+          } catch (_) {}
+        })
         .catch(() => {});
     }
   }, [S.account]);
@@ -143,11 +169,29 @@ function App() {
           const parts = (c.name || '').split(' ');
           const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
           const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
-          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', stage: c.stage || 'inscricao', locality: '—', localityId: null, initials, days, source: 'PEDAL', periods: [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
+          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods: c.periods ? c.periods.split(', ').filter(Boolean) : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
         }));
       })
       .catch(() => {});
   }, [coordJwt]);
+
+  // Sincroniza stage com o backend sempre que muda
+  useEffectA(() => {
+    if (!S.stage || !S.candidateId || !candidateJwt) return;
+    const base = `http://localhost:3001/api/candidates/${S.candidateId}`;
+    const hdrs = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${candidateJwt}` };
+    fetch(base, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ stage: S.stage }) }).catch(() => {});
+    if (S.candidate.periods && S.candidate.periods.length) {
+      const perData = window.PEDAL && window.PEDAL.PERIODS;
+      const periodsText = S.candidate.periods.map((id) => perData ? ((perData.find((p) => p.id === id) || {}).name || id) : id).join(', ');
+      fetch(base, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ periods: periodsText }) }).catch(() => {});
+    }
+    if (S.candidate.localities && S.candidate.localities.length) {
+      const locs = window.PEDAL && window.PEDAL.LOCALITIES;
+      const names = S.candidate.localities.map((id) => locs ? ((locs.find((l) => l.id === id) || {}).name || id) : id).join(', ');
+      fetch(base, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ locality: names }) }).catch(() => {});
+    }
+  }, [S.stage, candidateJwt]);
 
   // — Fase 4: locais de encontro, utilizadores de gestão e perfil da coordenação —
   const addStation = (st) => setS((p) => ({ ...p, stations: [...(p.stations || []), { id: 'st' + Math.random().toString(36).slice(2, 8), ...st }] }));
@@ -161,7 +205,7 @@ function App() {
   const removeNeed = (id) => setS((p) => ({ ...p, needs: (p.needs || []).filter((n) => n.id !== id) }));
   const reset = () => { localStorage.removeItem(STORE_KEY); setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, trainers: INITIAL.trainers.map((t) => ({ ...t })), contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, moduleContent: {}, stations: INITIAL.stations.map((s) => ({ ...s })), mgmtUsers: INITIAL.mgmtUsers.map((u) => ({ ...u })), needs: INITIAL.needs.map((n) => ({ ...n })), coordProfile: { ...INITIAL.coordProfile }, moduleConversations: {} }); setResetKey((k) => k + 1); };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, realCandidates };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, realCandidates, candidateJwt };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

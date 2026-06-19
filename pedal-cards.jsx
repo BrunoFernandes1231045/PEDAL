@@ -60,8 +60,9 @@ function ProfileForm({ onSubmit }) {
   const [dob, setDob] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [cc, setCc] = useState('');
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const valid = name.trim().length > 1 && phone.trim().length > 6 && emailOk && dob;
+  const valid = name.trim().length > 1 && phone.trim().length > 6 && emailOk && dob && cc.trim().length >= 8;
   return (
     <div className="pedal-card">
       <Field label="Como te chamas?">
@@ -70,6 +71,9 @@ function ProfileForm({ onSubmit }) {
       <Field label="Data de nascimento">
         <input className="pedal-input" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
       </Field>
+      <Field label="Número do Cartão de Cidadão">
+        <input className="pedal-input" value={cc} onChange={(e) => setCc(e.target.value.replace(/[^\d]/g, '').slice(0, 8))} placeholder="XXXXXXXX" maxLength={8} />
+      </Field>
       <Field label="Telemóvel">
         <input className="pedal-input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="9XX XXX XXX" />
       </Field>
@@ -77,7 +81,7 @@ function ProfileForm({ onSubmit }) {
         <input className="pedal-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.pt" />
         <div style={{ font: '400 11px var(--ui)', color: 'var(--ink-soft)', marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="lock" size={12} />Enviamos para aqui os teus dados de acesso à app.</div>
       </Field>
-      <button className="pedal-btn primary" disabled={!valid} onClick={() => onSubmit({ name: name.trim(), dob, contact: phone.trim(), email: email.trim() })}
+      <button className="pedal-btn primary" disabled={!valid} onClick={() => onSubmit({ name: name.trim(), dob, cc: cc.trim(), contact: phone.trim(), email: email.trim() })}
         style={{ opacity: valid ? 1 : 0.45, width: '100%', marginTop: 4 }}>Continuar</button>
     </div>
   );

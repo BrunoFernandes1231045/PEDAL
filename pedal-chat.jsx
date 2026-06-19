@@ -492,6 +492,13 @@ function ChatView({ store, tone = 'caloroso' }) {
     if (it.type === 'card:formalize') return <FormalizationCard onConfirm={(sig, nif) => {
       store.up({ signature: sig, termsAccepted: true });
       patchCandidate({ nif });
+      if (S.candidateId && store.candidateJwt) {
+        fetch(`http://localhost:3001/api/candidates/${S.candidateId}/formalize`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
+          body: JSON.stringify({ nif, signature: 'signed' }),
+        }).catch(() => {});
+      }
       addMessage({ from: 'system', text: 'Termo de compromisso assinado · NIF recolhido · piloto ativado' });
       notify({ type: 'ativo', text: 'assinou o termo de compromisso e é agora piloto voluntário ativo' });
       setStage('ativo');

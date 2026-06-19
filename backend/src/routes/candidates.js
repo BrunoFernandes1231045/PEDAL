@@ -12,10 +12,10 @@ function genPassword() {
 
 // POST /api/candidates — público (inscrição)
 router.post('/', async (req, res) => {
-  const { name, email, dob, phone } = req.body;
+  const { name, email, dob, phone, cc, password: providedPassword } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name e email são obrigatórios' });
 
-  const initialPassword = genPassword();
+  const initialPassword = providedPassword || genPassword();
 
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
@@ -27,7 +27,7 @@ router.post('/', async (req, res) => {
 
   const { data, error } = await supabase
     .from('candidates')
-    .insert({ name, email, dob, phone, stage: 'inscricao', user_id: authData.user.id })
+    .insert({ name, email, dob, phone, cc: cc || null, stage: 'inscricao', user_id: authData.user.id })
     .select()
     .single();
 
@@ -45,8 +45,9 @@ router.get('/', requireAuth, requireCoordinator, async (req, res) => {
 // GET /api/candidates/:id — próprio ou coordinator
 router.get('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
-  if (req.user.role !== 'coordinator' && req.user.id !== id) {
-    return res.status(403).json({ error: 'Proibido' });
+  if (req.user.role !== 'coordinator') {
+    const { data: own } = await supabase.from('candidates').select('user_id').eq('id', id).single();
+    if (!own || own.user_id !== req.user.id) return res.status(403).json({ error: 'Proibido' });
   }
   const { data, error } = await supabase
     .from('candidates').select('*').eq('id', id).single();
@@ -72,8 +73,9 @@ router.patch('/:id/formalize', requireAuth, async (req, res) => {
 // PATCH /api/candidates/:id — próprio ou coordinator
 router.patch('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
-  if (req.user.role !== 'coordinator' && req.user.id !== id) {
-    return res.status(403).json({ error: 'Proibido' });
+  if (req.user.role !== 'coordinator') {
+    const { data: own } = await supabase.from('candidates').select('user_id').eq('id', id).single();
+    if (!own || own.user_id !== req.user.id) return res.status(403).json({ error: 'Proibido' });
   }
   const { data, error } = await supabase
     .from('candidates')
