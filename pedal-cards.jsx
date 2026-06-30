@@ -61,8 +61,9 @@ function ProfileForm({ onSubmit }) {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [cc, setCc] = useState('');
+  const [profissao, setProfissao] = useState('');
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const valid = name.trim().length > 1 && phone.trim().length > 6 && emailOk && dob && cc.trim().length >= 8;
+  const valid = name.trim().length > 1 && phone.trim().length > 6 && emailOk && dob && cc.trim().length >= 8 && profissao.trim().length > 1;
   return (
     <div className="pedal-card">
       <Field label="Como te chamas?">
@@ -74,6 +75,9 @@ function ProfileForm({ onSubmit }) {
       <Field label="Número do Cartão de Cidadão">
         <input className="pedal-input" value={cc} onChange={(e) => setCc(e.target.value.replace(/[^\d]/g, '').slice(0, 8))} placeholder="XXXXXXXX" maxLength={8} />
       </Field>
+      <Field label="Profissão">
+        <input className="pedal-input" value={profissao} onChange={(e) => setProfissao(e.target.value)} placeholder="Ex.: Professor, Engenheiro, Reformado…" />
+      </Field>
       <Field label="Telemóvel">
         <input className="pedal-input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="9XX XXX XXX" />
       </Field>
@@ -81,18 +85,55 @@ function ProfileForm({ onSubmit }) {
         <input className="pedal-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.pt" />
         <div style={{ font: '400 11px var(--ui)', color: 'var(--ink-soft)', marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="lock" size={12} />Enviamos para aqui os teus dados de acesso à app.</div>
       </Field>
-      <button className="pedal-btn primary" disabled={!valid} onClick={() => onSubmit({ name: name.trim(), dob, cc: cc.trim(), contact: phone.trim(), email: email.trim() })}
+      <button className="pedal-btn primary" disabled={!valid} onClick={() => onSubmit({ name: name.trim(), dob, cc: cc.trim(), profissao: profissao.trim(), contact: phone.trim(), email: email.trim() })}
         style={{ opacity: valid ? 1 : 0.45, width: '100%', marginTop: 4 }}>Continuar</button>
     </div>
   );
 }
 
-// Triagem: localidade(s) + disponibilidade (RF-07) — permite escolher vários locais
-function TriageForm({ localities, periods, onSubmit }) {
+// Grelha de disponibilidade dia × período (edit + read-only)
+function AvailabilityGrid({ value, onChange, readOnly }) {
+  const P = window.PEDAL;
+  const isOn = (day, period) => (value || []).some((a) => a.day === day && a.period === period);
+  function toggle(day, period) {
+    if (readOnly) return;
+    const next = isOn(day, period)
+      ? (value || []).filter((a) => !(a.day === day && a.period === period))
+      : [...(value || []), { day, period }];
+    onChange(next);
+  }
+  return (
+    <div className="pedal-avail-grid">
+      <div className="pedal-avail-header">
+        <div />
+        {P.PERIODS.map((p) => (
+          <div key={p.id} className="pedal-avail-col-head">{p.name}</div>
+        ))}
+      </div>
+      {P.WEEKDAYS.map((d) => (
+        <div key={d.id} className="pedal-avail-row">
+          <div className="pedal-avail-day">{d.name}</div>
+          {P.PERIODS.map((p) => (
+            <button key={p.id} type="button"
+              className={'pedal-avail-cell' + (isOn(d.id, p.id) ? ' on' : '') + (readOnly ? ' readonly' : '')}
+              onClick={() => toggle(d.id, p.id)} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Triagem: localidade(s) + disponibilidade por dia×período (RF-07)
+function TriageForm({ localities, onSubmit }) {
   const [locs, setLocs] = useState(['matosinhos']);
-  const [per, setPer] = useState(['flex']);
-  const toggle = (id) => setPer((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+  const [availability, setAvailability] = useState([]);
   const toggleLoc = (id) => setLocs((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+  const valid = locs.length > 0 && availability.length > 0;
+  function handleSubmit() {
+    const periods = [...new Set(availability.map((a) => a.period))];
+    onSubmit({ localities: locs, locality: locs[0], availability, periods });
+  }
   return (
     <div className="pedal-card">
       <Field label="Onde gostarias de pedalar? (podes escolher vários)">
@@ -105,19 +146,14 @@ function TriageForm({ localities, periods, onSubmit }) {
           ))}
         </div>
       </Field>
-      <Field label="Que disponibilidade tens?">
-        <div className="pedal-pickgrid">
-          {periods.map((p) => (
-            <button key={p.id} onClick={() => toggle(p.id)}
-              className={'pedal-pick' + (per.includes(p.id) ? ' on' : '')}>
-              {p.name}
-            </button>
-          ))}
-        </div>
+      <Field label="Qual é a tua disponibilidade? (seleciona os dias e horários)">
+        <AvailabilityGrid value={availability} onChange={setAvailability} />
       </Field>
-      <button className="pedal-btn primary" disabled={!per.length || !locs.length}
-        onClick={() => onSubmit({ localities: locs, locality: locs[0], periods: per })}
-        style={{ opacity: (per.length && locs.length) ? 1 : 0.45, width: '100%', marginTop: 4 }}>Ver disponibilidade</button>
+      <button className="pedal-btn primary" disabled={!valid}
+        onClick={handleSubmit}
+        style={{ opacity: valid ? 1 : 0.45, width: '100%', marginTop: 8 }}>
+        Ver disponibilidade
+      </button>
     </div>
   );
 }

@@ -149,6 +149,16 @@ input{font-family:inherit;}
 .pedal-pick.on{border-color:var(--primary); background:var(--primary-soft); color:var(--primary-deep);}
 .pedal-pick svg{opacity:.6;}
 .pedal-pick.on svg{opacity:1; color:var(--primary);}
+/* availability grid */
+.pedal-avail-grid{display:grid; gap:2px; margin-top:4px;}
+.pedal-avail-header{display:grid; grid-template-columns:40px repeat(3,1fr); gap:2px; margin-bottom:2px;}
+.pedal-avail-col-head{font:600 11px var(--ui); color:var(--ink-soft); text-align:center; padding:3px 0;}
+.pedal-avail-row{display:grid; grid-template-columns:40px repeat(3,1fr); gap:2px;}
+.pedal-avail-day{font:600 12px var(--ui); color:var(--ink-soft); display:flex; align-items:center; padding-left:2px;}
+.pedal-avail-cell{height:30px; border-radius:7px; border:1.5px solid var(--line); background:var(--app-bg); cursor:pointer; transition:.12s;}
+.pedal-avail-cell.on{border-color:var(--primary); background:var(--primary-soft);}
+.pedal-avail-cell.readonly{cursor:default; pointer-events:none;}
+.pedal-avail-cell.on.readonly{background:var(--primary-soft); border-color:var(--primary);}
 .pedal-contactrow{display:flex; align-items:center; gap:10px; background:var(--app-bg); border-radius:11px; padding:11px 13px;}
 
 /* ── Tab body (Formação / Processo) ────────────────────────── */
