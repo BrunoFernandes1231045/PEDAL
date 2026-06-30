@@ -90,6 +90,9 @@ function AuthGate({ store }) {
 }
 
 // ── Painel de login (acede ao perfil; entrada direta no agente dispensa-o) ──
+const SUPABASE_URL = 'https://mamvckyoqrjhivffimob.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM';
+
 function LoginPanel({ store }) {
   const S = store.S;
   const hasAccount = !!S.account;
@@ -97,12 +100,81 @@ function LoginPanel({ store }) {
   const [pw, setPw] = useStateAu('');
   const [err, setErr] = useStateAu('');
   const [hint, setHint] = useStateAu(false);
-  const tryLogin = () => {
-    const acc = S.account;
-    if (!acc) { setErr('Ainda não tens conta. Faz a tua inscrição na conversa com o PEDAL e recebes as credenciais por email.'); return; }
-    if (email.trim().toLowerCase() === (acc.email || '').toLowerCase() && pw.trim() === acc.password) { setErr(''); store.setSession(true); }
-    else setErr('Email ou palavra-passe incorretos. Confirma os dados enviados por email.');
+  const [loading, setLoading] = useStateAu(false);
+
+  const tryLogin = async () => {
+    if (!email.trim() || !pw.trim()) return;
+    setLoading(true); setErr('');
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ email: email.trim(), password: pw.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error_description || 'Email ou palavra-passe incorretos.'); return; }
+
+      const jwt = data.access_token;
+      const role = data.user && data.user.user_metadata && data.user.user_metadata.role;
+
+      if (role === 'coordinator') {
+        if (window.__PEDAL_MODE === 'coord') {
+          store.setCoordJwt(jwt);
+        } else {
+          window.location.href = 'coordenacao.html';
+        }
+        return;
+      }
+
+      // Candidato: vai buscar o perfil ao backend
+      const meRes = await fetch('http://localhost:3001/api/candidates/me', {
+        headers: { 'Authorization': `Bearer ${jwt}` },
+      });
+      if (!meRes.ok) { setErr('Conta encontrada, mas sem perfil de candidato associado.'); return; }
+      const profile = await meRes.json();
+
+      const STAGE_TO_NODE = {
+        inscricao: 'triage',
+        apresentacao: 'present',
+        triagem: 'triage_result',
+        espera: 'await_waitinglist',
+        entrevista: 'interview',
+        validacao: 'await_validation',
+        onboarding: 'goto_onboarding',
+        pratica: 'await_reschedule',
+        ativo: 'active_home',
+      };
+      // Prefer the node already saved in localStorage (set when the user last interacted);
+      // fall back to STAGE_TO_NODE only when no existing node is known.
+      const stageNode = STAGE_TO_NODE[profile.stage] || 'triage';
+      const node = (store.S.chat && store.S.chat.node) || stageNode;
+
+      // Tenta recuperar IDs a partir dos nomes guardados na BD
+      const perData = window.PEDAL && window.PEDAL.PERIODS;
+      const locs = window.PEDAL && window.PEDAL.LOCALITIES;
+      const periods = profile.periods
+        ? profile.periods.split(', ').filter(Boolean).map((n) => { const f = perData && perData.find((p) => p.name === n); return f ? f.id : n; })
+        : [];
+      const localities = profile.locality
+        ? profile.locality.split(', ').filter(Boolean).map((n) => { const f = locs && locs.find((l) => l.name === n); return f ? f.id : n; })
+        : [];
+      const availability = Array.isArray(profile.availability) ? profile.availability : [];
+
+      const savedMessages = Array.isArray(profile.chat_messages) && profile.chat_messages.length ? profile.chat_messages : [];
+      store.up({ candidateId: profile.id, account: { email: email.trim(), password: pw.trim() }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
+      store.patchCandidate({ name: profile.name || '', email: profile.email || '', dob: profile.dob || '', contact: profile.phone || '', cc: profile.cc || '', localities, periods, availability });
+      store.setStage(profile.stage || 'inscricao');
+      store.setChat({ node, restoreInteraction: true });
+      store.setSession(true);
+      store.setCandidateJwt(jwt);
+      store.goTab('conversa');
+    } catch (_) {
+      setErr('Erro de ligação ao servidor.');
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
     <div className="pedal-screen">
       <TabHeader title="Entrar" subtitle="Acede à tua conta de voluntário" />
@@ -113,16 +185,18 @@ function LoginPanel({ store }) {
             <div style={{ font: '800 18px var(--display)', color: 'var(--ink)', marginTop: 12 }}>Bem-vindo(a) de volta</div>
             <p style={{ font: '400 13px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '4px 0 0', textAlign: 'center', maxWidth: 260 }}>Entra para ver e gerir o teu perfil. Para te candidatares, é só conversar com o PEDAL — não precisas de conta. 🚲</p>
           </div>
-          <Field label="Email"><input className="pedal-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.pt" /></Field>
-          <Field label="Palavra-passe"><input className="pedal-input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="A que recebeste por email" /></Field>
+          <Field label="Email"><input className="pedal-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.pt" onKeyDown={(e) => e.key === 'Enter' && tryLogin()} /></Field>
+          <Field label="Palavra-passe"><input className="pedal-input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="A que recebeste por email" onKeyDown={(e) => e.key === 'Enter' && tryLogin()} /></Field>
           {err && <div className="pedal-autherr"><Icon name="shield" size={14} />{err}</div>}
-          <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} onClick={tryLogin}>Entrar</button>
+          <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} onClick={tryLogin} disabled={loading || !email.trim() || !pw.trim()}>
+            {loading ? 'A entrar…' : 'Entrar'}
+          </button>
           {hasAccount ? (
             <div style={{ marginTop: 12 }}>
-              <button className="pedal-authlink" onClick={() => setHint((h) => !h)}>{hint ? 'Ocultar credenciais de demonstração' : 'Esqueci-me dos dados de acesso'}</button>
+              <button className="pedal-authlink" onClick={() => setHint((h) => !h)}>{hint ? 'Ocultar credenciais' : 'Esqueci-me dos dados de acesso'}</button>
               {hint && (
                 <div className="pedal-credhint">
-                  <span style={{ font: '700 10.5px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>Demonstração · enviadas por email</span>
+                  <span style={{ font: '700 10.5px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>Credenciais · enviadas por email</span>
                   <div className="pedal-credrow"><span>Email</span><strong>{S.account.email}</strong></div>
                   <div className="pedal-credrow"><span>Palavra-passe</span><strong>{S.account.password}</strong></div>
                   <button className="pedal-btn ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => { setEmail(S.account.email); setPw(S.account.password); }}>Preencher automaticamente</button>
@@ -285,9 +359,6 @@ function CoordLoginScreen({ store }) {
   const [pw, setPw] = useStateAu('');
   const [err, setErr] = useStateAu('');
   const [loading, setLoading] = useStateAu(false);
-
-  const SUPABASE_URL = 'https://mamvckyoqrjhivffimob.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM';
 
   const handleLogin = async () => {
     if (!email || !pw) return;
