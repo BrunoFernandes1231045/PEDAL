@@ -11,8 +11,42 @@ const NOTIF_META = {
   agendado: { icon: 'clock', tone: 'amber', verb: 'Formação prática' },
   ativo: { icon: 'sparkle', tone: 'green', verb: 'Piloto ativado' },
   rejeitado: { icon: 'doc', tone: 'neutral', verb: 'Candidatura rejeitada' },
+  retomado: { icon: 'user', tone: 'green', verb: 'Retomado da lista de espera' },
   contacto: { icon: 'phone', tone: 'amber', verb: 'Pedido de contacto' },
 };
+
+// Grelha de disponibilidade dia × período (read-only, reutilizada do pedal-cards.jsx)
+function AvailabilityGrid({ value, onChange, readOnly }) {
+  const P = window.PEDAL;
+  const isOn = (day, period) => (value || []).some((a) => a.day === day && a.period === period);
+  function toggle(day, period) {
+    if (readOnly) return;
+    const next = isOn(day, period)
+      ? (value || []).filter((a) => !(a.day === day && a.period === period))
+      : [...(value || []), { day, period }];
+    onChange(next);
+  }
+  return (
+    <div className="pedal-avail-grid">
+      <div className="pedal-avail-header">
+        <div />
+        {P.PERIODS.map((p) => (
+          <div key={p.id} className="pedal-avail-col-head">{p.name}</div>
+        ))}
+      </div>
+      {P.WEEKDAYS.map((d) => (
+        <div key={d.id} className="pedal-avail-row">
+          <div className="pedal-avail-day">{d.name}</div>
+          {P.PERIODS.map((p) => (
+            <button key={p.id} type="button"
+              className={'pedal-avail-cell' + (isOn(d.id, p.id) ? ' on' : '') + (readOnly ? ' readonly' : '')}
+              onClick={() => toggle(d.id, p.id)} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Dashboard({ store }) {
   const S = store.S; const P = window.PEDAL;
@@ -452,19 +486,30 @@ function WaitingList({ ctx }) {
         <div className="pedal-taskempty" style={{ marginTop: 14 }}><Icon name="clock" size={16} color="var(--ink-soft)" />Ninguém corresponde a estes filtros.</div>
       ) : (
         <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
-          {list.map((c) => (
-            <button key={c.id} className="pedal-listrow" onClick={() => setSel(c)}>
-              <div className="pedal-kav">{c.initials}</div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{c.name}</div>
-                <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{c.locality} · {(c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') || '—'}</div>
+          {list.map((c) => {
+            const weekdays = (c.weekdays || []).map((d) => (P.WEEKDAYS.find((x) => x.id === d) || {}).name).join(' ');
+            const perLabel = (c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') || '—';
+            return (
+              <div key={c.id} className="pedal-listrow" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'default' }}>
+                <button style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', minWidth: 0 }} onClick={() => setSel(c)}>
+                  <div className="pedal-kav">{c.initials}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{c.name}</div>
+                    <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{c.locality} · {perLabel}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', marginRight: 4 }}>
+                    <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>{c.days} dias</div>
+                    {weekdays && <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>{weekdays}</div>}
+                  </div>
+                </button>
+                <button className="pedal-taskbtn" onClick={() => {
+                  if (c.live) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
+                  else { store.setOverride(c.id, 'validacao'); }
+                  store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
+                }}>Retomar</button>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>{c.days} dias</div>
-                <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>{(c.weekdays || []).map((d) => (P.WEEKDAYS.find((x) => x.id === d) || {}).name).join(' ')}</div>
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -1076,7 +1121,14 @@ function CandidateDetail({ c, store, onClose }) {
           <DetailItem label="Email" value={c.email || '—'} />
           <DetailItem label="Telefone" value={c.contact || '—'} />
           <DetailItem label="Data de nascimento" value={c.dob ? `${P.fmtDate(c.dob)}${age != null ? ` · ${age} anos` : ''}` : '—'} />
-          <DetailItem label="Disponibilidade" value={(c.periods && c.periods.length) ? c.periods.map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') : '—'} />
+          {(c.availability && c.availability.length) ? (
+            <div className="pedal-detailitem" style={{ gridColumn: '1 / -1' }}>
+              <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 6 }}>Disponibilidade</div>
+              <AvailabilityGrid value={c.availability} readOnly />
+            </div>
+          ) : (
+            <DetailItem label="Disponibilidade" value={(c.periods && c.periods.length) ? c.periods.map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') : '—'} />
+          )}
           {c.nif && <DetailItem label="NIF (seguro)" value={c.nif} />}
           <DetailItem label="No funil há" value={c.days === 0 ? 'hoje' : c.days + ' dias'} />
         </div>
@@ -1146,8 +1198,20 @@ function CandidateDetail({ c, store, onClose }) {
         {c.stage === 'validacao' && !rejecting && (
           <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
             <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setRejecting(true)}>Rejeitar</button>
+            <button className="pedal-btn ghost" style={{ flex: 1 }}
+              onClick={() => {
+                if (c.live) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
+                else { store.setOverride(c.id, 'espera'); }
+                store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
+                onClose();
+              }}>Lista de espera</button>
             <button className="pedal-btn primary" style={{ flex: 1 }}
-              onClick={() => { if (c.live) { store.up({ validated: true }); store.setStage('onboarding'); } else { store.setOverride(c.id, 'onboarding'); } store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' }); onClose(); }}>
+              onClick={() => {
+                if (c.live) { store.up({ validated: true }); store.setStage('onboarding'); }
+                else { store.setOverride(c.id, 'onboarding'); }
+                store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+                onClose();
+              }}>
               Validar candidatura ✓
             </button>
           </div>
