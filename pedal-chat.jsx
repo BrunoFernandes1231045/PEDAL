@@ -68,7 +68,10 @@ function ChatView({ store, tone = 'caloroso' }) {
           lines.push({ text: 'Recordo só que contamos com cerca de 2 horas por semana da tua parte. Se isso te servir, avançamos já para uma breve entrevista — demora cerca de 2 minutos.' });
           return lines;
         }
-        return [{ text: `Neste momento não há vaga compatível com a tua zona e disponibilidade. 🙏` }, { text: 'Mas guardo o teu perfil em lista de espera e aviso-te assim que surgir uma necessidade compatível.' }];
+        return [
+          { text: `Neste momento não há vaga compatível em ${names(sel)} com a tua disponibilidade. 🙏` },
+          { text: 'Ficaste automaticamente em lista de espera — avisamos-te assim que surgir uma necessidade compatível na tua zona. 💛' },
+        ];
       }
       case 'waitlisted': return [{ text: 'Combinado, ficas na nossa lista! 💛 Entretanto posso esclarecer dúvidas — ou ligo-te à equipa quando quiseres.' }];
       case 'interview': return [{ text: `Vou fazer-te ${INTERVIEW.length} perguntas rápidas para a coordenação te conhecer. 🙌` }, { text: INTERVIEW[0].q }];
@@ -116,7 +119,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         const anyOpen = ids.map(locOf).some((l) => P.needMatch(S.needs, l.name, S.candidate.periods));
         return anyOpen
           ? { type: 'quick', options: [{ label: 'Começar entrevista →', go: 'interview', accent: 'fill' }, { label: 'Tenho uma dúvida', action: 'askPedal' }] }
-          : { type: 'quick', options: [{ label: 'Avisem-me quando houver vaga ✓', go: 'waitlisted', accent: 'fill' }, { label: 'Escolher outras zonas', go: 'triage' }] };
+          : { type: 'quick', options: [{ label: 'Escolher outras zonas', go: 'triage' }] };
       }
       case 'interview': return stepInteraction((S.chat && S.chat.interviewStep) || 0);
       case 'await_validation': return { type: 'note', text: '⏳ A aguardar a validação da coordenação… Recebes aviso aqui assim que a tua candidatura for aprovada.' };
@@ -129,6 +132,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'formalize': return { type: 'card:formalize' };
       case 'active_home': return { type: 'activefaq' };
       case 'rejected': return { type: 'quick', options: [{ label: 'Manter o meu perfil', action: 'keep_profile', accent: 'fill' }, { label: 'Apagar o meu perfil', action: 'delete_profile' }] };
+      case 'await_waitinglist': return { type: 'note', text: '💛 Estás em lista de espera. Avisamos-te assim que houver uma vaga compatível na tua zona.' };
       default: return null;
     }
   }
@@ -293,6 +297,15 @@ function ChatView({ store, tone = 'caloroso' }) {
     // eslint-disable-next-line
   }, []);
 
+  // login com sessão guardada: restaura a interação correcta após o componente já ter montado
+  const restoreFlag = !!(S.chat && S.chat.restoreInteraction);
+  useEffectC(() => {
+    if (!restoreFlag) return;
+    setInteraction(interactionFor((S.chat && S.chat.node) || 'triage'));
+    store.setChat({ restoreInteraction: false });
+    // eslint-disable-next-line
+  }, [restoreFlag]);
+
   // a coordenação validou → o chat avança para o perfil de função
   useEffectC(() => {
     if (S.validated && node === 'await_validation') {
@@ -328,6 +341,30 @@ function ChatView({ store, tone = 'caloroso' }) {
     else if (S.stage === 'ativo' && node !== 'active_home' && node !== 'formalize') enterNode('active_home');
     // eslint-disable-next-line
   }, [S.stage]);
+
+  // coordenação colocou candidato em lista de espera manualmente
+  useEffectC(() => {
+    if (!S.pushedToWaitingList) return;
+    store.up({ pushedToWaitingList: false });
+    setChat({ node: 'await_waitinglist' });
+    say([
+      { text: 'A coordenação colocou-te em lista de espera por agora. 🙏' },
+      { text: 'Assim que surgir uma vaga compatível na tua zona, entraremos em contacto contigo. 💛' },
+    ], () => setInteraction(interactionFor('await_waitinglist')));
+    // eslint-disable-next-line
+  }, [S.pushedToWaitingList]);
+
+  // coordenação retomou candidato da lista de espera
+  useEffectC(() => {
+    if (!S.waitingListResumed) return;
+    store.up({ waitingListResumed: false });
+    setChat({ node: 'await_validation' });
+    say([
+      { text: '🎉 Boa notícia! A coordenação retomou a tua candidatura.' },
+      { text: 'Estamos a analisar o teu perfil — assim que tivermos uma decisão, avisamos-te aqui. 🙏' },
+    ], () => setInteraction(interactionFor('await_validation')));
+    // eslint-disable-next-line
+  }, [S.waitingListResumed]);
 
   // aniversário do piloto → o PEDAL envia os parabéns (uma vez por ano)
   useEffectC(() => {
@@ -454,11 +491,17 @@ function ChatView({ store, tone = 'caloroso' }) {
       addMessage({ from: 'agent', id: uidC(), card: 'credentials' });
       enterNode('triage');
     }} />;
-    if (it.type === 'triage') return <TriageForm localities={P.LOCALITIES} periods={P.PERIODS} onSubmit={(d) => {
-      patchCandidate(d); setStage('triagem');
+    if (it.type === 'triage') return <TriageForm localities={P.LOCALITIES} onSubmit={(d) => {
+      patchCandidate({ localities: d.localities, locality: d.locality, periods: d.periods, availability: d.availability });
+      setStage('triagem');
       const selNames = (d.localities && d.localities.length ? d.localities : [d.locality]).map((id) => locOf(id).name).join(', ');
-      const perNames = d.periods.map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ');
-      addMessage({ from: 'user', text: `${selNames} · ${perNames}` }); enterNode('triage_result');
+      const availText = d.availability.map((a) => {
+        const dayName = (P.WEEKDAYS.find((x) => x.id === a.day) || {}).name || a.day;
+        const perName = (P.PERIODS.find((x) => x.id === a.period) || {}).name || a.period;
+        return `${dayName} ${perName.toLowerCase()}`;
+      }).join(', ');
+      addMessage({ from: 'user', text: `${selNames} · ${availText}` });
+      enterNode('triage_result');
     }} />;
     if (it.type === 'card:role') return <RoleProfileCard profile={P.ROLE_PROFILE} onAccept={() => { setOnboarding({ roleAccepted: true }); addMessage({ from: 'system', text: 'Perfil do piloto aceite' }); enterNode('goto_onboarding'); }} />;
     if (it.type === 'card:handoff') return <HandoffCard onBack={() => setInteraction(interactionFor(node))} />;
