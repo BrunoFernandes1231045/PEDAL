@@ -1,0 +1,1 @@
+alter table candidates add column if not exists availability jsonb default '[]';

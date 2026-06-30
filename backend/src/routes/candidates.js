@@ -12,7 +12,7 @@ function genPassword() {
 
 // POST /api/candidates — público (inscrição)
 router.post('/', async (req, res) => {
-  const { name, email, dob, phone, cc, password: providedPassword } = req.body;
+  const { name, email, dob, phone, cc, profissao, password: providedPassword } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name e email são obrigatórios' });
 
   const initialPassword = providedPassword || genPassword();
@@ -23,15 +23,15 @@ router.post('/', async (req, res) => {
     user_metadata: { role: 'candidate' },
     email_confirm: true,
   });
-  if (authError) return res.status(500).json({ error: authError.message });
+  if (authError) { console.error('[candidates] auth error:', authError.message); return res.status(500).json({ error: authError.message }); }
 
   const { data, error } = await supabase
     .from('candidates')
-    .insert({ name, email, dob, phone, cc: cc || null, stage: 'inscricao', user_id: authData.user.id })
+    .insert({ name, email, dob, phone, cc: cc || null, profissao: profissao || null, stage: 'inscricao', user_id: authData.user.id })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error('[candidates] insert error:', error.message, error.details); return res.status(500).json({ error: error.message }); }
   res.status(201).json({ ...data, initialPassword });
 });
 
@@ -39,6 +39,17 @@ router.post('/', async (req, res) => {
 router.get('/', requireAuth, requireCoordinator, async (req, res) => {
   const { data, error } = await supabase.from('candidates').select('*');
   if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// GET /api/candidates/me — próprio candidato
+router.get('/me', requireAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from('candidates')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .single();
+  if (error || !data) return res.status(404).json({ error: 'Candidato não encontrado' });
   res.json(data);
 });
 
@@ -77,9 +88,13 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const { data: own } = await supabase.from('candidates').select('user_id').eq('id', id).single();
     if (!own || own.user_id !== req.user.id) return res.status(403).json({ error: 'Proibido' });
   }
+  const body = { ...req.body };
+  if (body.availability && Array.isArray(body.availability)) {
+    body.periods = [...new Set(body.availability.map((a) => a.period))];
+  }
   const { data, error } = await supabase
     .from('candidates')
-    .update({ ...req.body, updated_at: new Date() })
+    .update({ ...body, updated_at: new Date() })
     .eq('id', id).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
