@@ -16,19 +16,16 @@ PEDAL.LOCALITIES = [
 ];
 
 PEDAL.PERIODS = [
-  { id: 'manha',   name: 'Manhãs' },
-  { id: 'tarde',   name: 'Tardes' },
-  { id: 'fimsem',  name: 'Fins de semana' },
-  { id: 'flex',    name: 'Flexível' },
+  { id: 'manha', name: 'Manhã' },
+  { id: 'tarde', name: 'Tarde' },
+  { id: 'flex',  name: 'Flexível' },
 ];
 
 // ── Base de NECESSIDADES (vagas abertas geridas pela coordenação) ────
-// Cada necessidade = uma localidade + os períodos de disponibilidade abertos.
-// Quem corresponde avança; todos os outros entram em lista de espera.
 PEDAL.SEED_NEEDS = [
-  { id: 'nd1', locality: 'Matosinhos', periods: ['manha', 'tarde', 'fimsem'] },
+  { id: 'nd1', locality: 'Matosinhos', periods: ['manha', 'tarde'] },
   { id: 'nd2', locality: 'Maia',       periods: ['manha'] },
-  { id: 'nd3', locality: 'Esposende',  periods: ['fimsem'] },
+  { id: 'nd3', locality: 'Esposende',  periods: ['flex'] },
 ];
 
 // Há vaga aberta para esta localidade + disponibilidade do candidato?
@@ -162,13 +159,14 @@ PEDAL.STAGES = [
 PEDAL.stageIndex = (id) => PEDAL.STAGES.findIndex((s) => s.id === id);
 PEDAL.stageLabel = (id) => (PEDAL.STAGES.find((s) => s.id === id) || {}).label || id;
 
-// Funil de captação — apenas estes 5 estados (RF). Outros estados têm secções próprias.
+// Funil de captação — apenas estes 6 estados (RF). Outros estados têm secções próprias.
 PEDAL.FUNNEL = [
-  { id: 'inscricao',  label: 'Inscrição',  match: ['inscricao', 'apresentacao'] },
-  { id: 'triagem',    label: 'Triagem',    match: ['triagem'] },
-  { id: 'entrevista', label: 'Entrevista', match: ['entrevista'] },
-  { id: 'validacao',  label: 'Validação',  match: ['validacao'] },
-  { id: 'onboarding', label: 'Onboarding', match: ['onboarding'] },
+  { id: 'inscricao',  label: 'Inscrição',       match: ['inscricao', 'apresentacao'] },
+  { id: 'triagem',    label: 'Triagem',          match: ['triagem'] },
+  { id: 'espera',     label: 'Lista de espera',  match: ['espera'] },
+  { id: 'entrevista', label: 'Entrevista',        match: ['entrevista'] },
+  { id: 'validacao',  label: 'Validação',         match: ['validacao'] },
+  { id: 'onboarding', label: 'Onboarding',        match: ['onboarding'] },
 ];
 // devolve a coluna do funil de um estado, ou null se pertence a outra secção
 PEDAL.funnelCol = (stage) => (PEDAL.FUNNEL.find((c) => c.match.includes(stage)) || {}).id || null;
