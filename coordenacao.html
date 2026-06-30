@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PEDAL · Coordenação</title>
+<style>
+:root{
+  --display:'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --ui:'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --bg:#E9EFED; --app-bg:#F6F8F7; --surface:#FFFFFF;
+  --ink:#161616; --ink-soft:#6C736F; --line:#E4E9E7;
+  --primary:#ED1C24; --primary-soft:#FDE7E8; --primary-deep:#C4151C;
+  --accent:#92D2C6; --accent-soft:#E7F4F1; --accent-deep:#1F7E6D;
+  --warn:#D69022; --warn-soft:#F8EDD7; --warn-deep:#8A5912;
+  --ph-a:#E9F1EF; --ph-b:#DBE9E5;
+  --fs:1;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{
+  background:var(--bg);
+  font-family:var(--ui); color:var(--ink);
+  -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+#root{height:100%;}
+button{font-family:inherit; cursor:pointer; border:none; background:none;}
+input{font-family:inherit;}
+
+/* ── Stage / top bar ───────────────────────────────────────── */
+.pedal-stage{height:100%; display:flex; flex-direction:column;}
+.pedal-topbar{
+  flex-shrink:0; height:56px; display:flex; align-items:center; gap:14px;
+  padding:0 18px; position:relative; z-index:30;
+}
+.pedal-brandmini{display:flex; align-items:center; gap:8px; font:800 16px var(--display); color:var(--ink); letter-spacing:.02em;}
+.pedal-logo{height:30px; width:auto; display:block;}
+.pedal-brandsep{color:var(--line); font-weight:400;}
+.pedal-reset{font:600 12.5px var(--ui); color:var(--ink-soft); padding:7px 10px; border-radius:8px;}
+.pedal-reset:hover{background:rgba(0,0,0,.04); color:var(--ink);}
+
+/* ── Dashboard ─────────────────────────────────────────────── */
+.pedal-dashwrap{flex:1; min-height:0; overflow-y:auto; padding:0 0 40px;}
+.pedal-dash{max-width:1120px; margin:0 auto; padding:24px 28px;}
+.pedal-dashhead{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px;}
+.pedal-coorduser{display:flex; align-items:center; gap:10px; font:600 13px var(--ui); color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 14px 6px 6px;}
+.pedal-coordav{width:32px; height:32px; border-radius:50%; background:var(--accent-soft); color:var(--accent-deep); display:flex; align-items:center; justify-content:center; font:800 12px var(--ui);}
+.pedal-metrics{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px;}
+.pedal-metric{display:flex; align-items:center; gap:13px; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px 18px; width:100%; text-align:left; cursor:pointer; transition:border-color .15s, transform .15s, box-shadow .15s;}
+.pedal-metric:hover{border-color:var(--primary); transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.05);}
+.pedal-metric-ic{width:42px; height:42px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+.pedal-metric-ic.green{background:var(--accent-soft); color:var(--accent-deep);}
+.pedal-metric-ic.amber{background:var(--warn-soft); color:var(--warn-deep);}
+.pedal-metric-ic.neutral{background:var(--primary-soft); color:var(--primary-deep);}
+.pedal-dashgrid{display:grid; grid-template-columns:1fr 340px; gap:18px; align-items:start;}
+.pedal-panel{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:18px; min-width:0;}
+.pedal-panelhead{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.pedal-kanban{display:flex; gap:12px; overflow-x:auto; padding-bottom:8px;}
+.pedal-kanban::-webkit-scrollbar{height:8px;}
+.pedal-kanban::-webkit-scrollbar-thumb{background:var(--line); border-radius:99px;}
+.pedal-kcol{flex-shrink:0; width:158px; background:var(--app-bg); border-radius:14px; padding:10px;}
+.pedal-kcolhead{display:flex; align-items:center; justify-content:space-between; font:700 11.5px var(--ui); color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin-bottom:9px; padding:0 2px;}
+.pedal-kcount{background:var(--surface); border:1px solid var(--line); border-radius:99px; padding:1px 7px; color:var(--ink); font-size:11px;}
+.pedal-kcards{display:flex; flex-direction:column; gap:7px; min-height:24px; max-height:283px; overflow-y:auto; overflow-x:hidden;}
+.pedal-kcards::-webkit-scrollbar{width:5px;}
+.pedal-kcards::-webkit-scrollbar-thumb{background:var(--line); border-radius:99px;}
+.pedal-kcard{display:flex; align-items:center; gap:9px; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:9px; transition:.14s; position:relative; width:100%;}
+.pedal-kcard:hover{border-color:var(--primary); transform:translateY(-1px);}
+.pedal-kcard.live{border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft);}
+.pedal-kav{width:30px; height:30px; border-radius:50%; flex-shrink:0; background:var(--accent-soft); color:var(--accent-deep); display:flex; align-items:center; justify-content:center; font:800 11px var(--ui);}
+.pedal-kav.big{width:48px; height:48px; font-size:16px;}
+.pedal-livedot{width:9px; height:9px; border-radius:50%; background:var(--accent-deep); flex-shrink:0; margin-left:auto; animation:livePulse 1.6s infinite;}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(31,126,109,.5);} 70%{box-shadow:0 0 0 6px rgba(31,126,109,0);} 100%{box-shadow:0 0 0 0 rgba(31,126,109,0);}}
+.pedal-feed{display:flex; flex-direction:column; gap:12px; max-height:520px; overflow-y:auto;}
+.pedal-feedrow{display:flex; gap:11px; align-items:flex-start;}
+.pedal-feedic{width:30px; height:30px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+.pedal-feedic.green{background:var(--accent-soft); color:var(--accent-deep);}
+.pedal-feedic.amber{background:var(--warn-soft); color:var(--warn-deep);}
+.pedal-feedic.neutral{background:var(--app-bg); color:var(--ink-soft); border:1px solid var(--line);}
+
+/* modal */
+.pedal-modal-wrap{position:fixed; inset:0; background:rgba(42,38,32,.45); display:flex; align-items:center; justify-content:center; z-index:200; padding:20px; animation:fadeIn .2s;}
+@keyframes fadeIn{from{opacity:0;} to{opacity:1;}}
+.pedal-modal{background:var(--surface); border-radius:20px; padding:22px; width:420px; max-width:100%; max-height:90vh; overflow-y:auto; position:relative; box-shadow:0 30px 70px rgba(0,0,0,.25); animation:cardIn .25s;}
+@keyframes cardIn{from{transform:translateY(8px);} to{transform:none;}}
+.pedal-modalclose{position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:50%; background:var(--app-bg); color:var(--ink-soft); font-size:14px;}
+.pedal-detailgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
+.pedal-detailitem{background:var(--app-bg); border-radius:11px; padding:10px 12px;}
+.pedal-ivrow{display:flex; justify-content:space-between; gap:12px; font:500 13px var(--ui); background:var(--app-bg); border-radius:9px; padding:8px 11px;}
+.pedal-ministep{width:18px; height:6px; border-radius:99px; background:var(--line);}
+.pedal-ministep.past{background:var(--primary);}
+.pedal-ministep.now{background:var(--accent);}
+
+/* ── Ações da coordenação (tarefas) ─────────────────────────── */
+.pedal-tasksgrid{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:20px; align-items:start;}
+.pedal-taskpanel{padding:18px;}
+.pedal-taskbadge{display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; border-radius:99px; background:var(--accent-deep); color:#fff; font:800 11px var(--ui);}
+.pedal-taskrow{display:flex; align-items:center; gap:11px; background:var(--app-bg); border:1px solid var(--line); border-radius:13px; padding:10px 12px;}
+.pedal-taskrow .pedal-kav{cursor:pointer; transition:.14s;}
+.pedal-taskrow .pedal-kav:hover{box-shadow:0 0 0 2px var(--primary-soft);}
+.pedal-taskrow .pedal-taskbtn{width:108px; justify-content:center;}
+.pedal-taskbtn{flex-shrink:0; display:inline-flex; align-items:center; gap:6px; padding:9px 13px; border-radius:10px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font:700 12.5px var(--ui); transition:.14s;}
+.pedal-taskbtn:hover{border-color:var(--primary); color:var(--primary-deep);}
+.pedal-taskbtn.primary{background:var(--primary); border-color:var(--primary); color:#fff;}
+.pedal-taskbtn.primary:hover{background:var(--primary-deep); color:#fff;}
+.pedal-taskempty{display:flex; align-items:center; gap:8px; font:500 13px var(--ui); color:var(--ink-soft); background:var(--app-bg); border-radius:12px; padding:14px 14px;}
+.pedal-tasknote{font:400 11.5px/1.5 var(--ui); color:var(--ink-soft); margin:13px 0 0;}
+.pedal-slotedit{display:grid; grid-template-columns:26px 1fr 1fr; gap:8px; align-items:center;}
+.pedal-slotnum{width:26px; height:26px; border-radius:50%; background:var(--primary-soft); color:var(--primary-deep); display:flex; align-items:center; justify-content:center; font:800 12px var(--ui);}
+.pedal-slotedit .pedal-input{height:42px; font-size:13px; padding:0 11px;}
+
+/* ── Coordenação: navegação por secções ─────────────────────── */
+.pedal-coordnav{display:flex; gap:6px; margin-bottom:20px; flex-wrap:wrap;}
+.pedal-coordtab{display:flex; align-items:center; gap:7px; padding:9px 15px; border-radius:11px; border:1px solid var(--line); background:var(--surface); color:var(--ink-soft); font:700 13px var(--ui); transition:color .15s, border-color .15s;}
+.pedal-coordtab:hover{border-color:var(--primary); color:var(--ink);}
+.pedal-coordtab.on{background:var(--primary); border-color:var(--primary); color:#fff;}
+.pedal-backtab{background:var(--app-bg); color:var(--ink-soft);}
+.pedal-backtab:hover{border-color:var(--primary); color:var(--primary-deep);}
+.pedal-navbadge{display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:99px; background:var(--accent-deep); color:#fff; font:800 10.5px var(--ui);}
+.pedal-coordtab.on .pedal-navbadge{background:rgba(255,255,255,.28);}
+
+/* ── Coordenação Fase 4: 3 ecrãs (Operação / Dashboards / Gestão) ── */
+.pedal-topnav{display:flex; gap:4px; background:var(--app-bg); border:1px solid var(--line); border-radius:999px; padding:4px;}
+.pedal-topnav button{display:flex; align-items:center; gap:7px; padding:8px 16px; border-radius:999px; font:700 13px var(--ui); color:var(--ink-soft); transition:color .15s;}
+.pedal-topnav button:hover{color:var(--ink);}
+.pedal-topnav button.on{background:var(--primary); color:#fff; box-shadow:0 2px 6px rgba(0,0,0,.12);}
+.pedal-profilemenu{position:absolute; top:calc(100% + 8px); right:0; width:288px; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 60px rgba(0,0,0,.22); padding:16px; z-index:60;}
+.pedal-bellbtn{position:relative; width:40px; height:40px; border-radius:50%; background:var(--surface); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); transition:.15s;}
+.pedal-bellbtn:hover{color:var(--primary-deep); border-color:var(--primary);}
+.pedal-bellbadge{position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 5px; border-radius:99px; background:var(--primary); color:#fff; font:800 10px var(--ui); display:flex; align-items:center; justify-content:center; border:2px solid var(--surface);}
+.pedal-notifmenu{position:fixed; top:64px; right:24px; width:344px; max-width:calc(100vw - 32px); max-height:calc(100vh - 96px); overflow-y:auto; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 60px rgba(0,0,0,.22); padding:14px; z-index:60;}
+.pedal-opsgrid{display:grid; grid-template-columns:2fr 1fr; gap:18px; align-items:start; margin-top:18px;}
+.pedal-funnel-wide{grid-template-columns:repeat(5,1fr);}
+
+/* Gestão: menu lateral + ecrã central */
+.pedal-gestao{display:grid; grid-template-columns:236px 1fr; gap:20px; align-items:start;}
+.pedal-gestaonav{display:flex; flex-direction:column; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:10px;}
+.pedal-gestaonav button{display:flex; align-items:center; gap:10px; padding:11px 13px; border-radius:11px; font:700 13px var(--ui); color:var(--ink-soft); text-align:left; transition:color .15s;}
+.pedal-gestaonav button:hover{background:var(--app-bg); color:var(--ink);}
+.pedal-gestaonav button.on{background:var(--primary-soft); color:var(--primary-deep);}
+
+/* Detalhe do formador */
+.pedal-detailbox{background:var(--app-bg); border:1px solid var(--line); border-radius:14px; padding:16px; margin-top:10px;}
+
+/* Estações */
+.pedal-stationrow{display:flex; align-items:flex-start; gap:12px; background:var(--app-bg); border:1px solid var(--line); border-radius:13px; padding:13px 14px;}
+
+/* Analytics */
+.pedal-statgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px;}
+.pedal-statcard{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:18px;}
+.pedal-bigstat{font:800 30px var(--display); color:var(--ink); line-height:1;}
+.pedal-barrow{display:flex; align-items:center; gap:12px; margin-bottom:9px;}
+.pedal-barlbl{font:600 12.5px var(--ui); color:var(--ink); width:120px; flex-shrink:0; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.pedal-bartrack{flex:1; height:22px; background:var(--app-bg); border-radius:7px; overflow:hidden;}
+.pedal-barfill{height:100%; border-radius:7px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font:800 11px var(--ui); color:#fff; min-width:24px; transition:width .6s cubic-bezier(.4,0,.2,1);}
+
+/* funil */
+.pedal-funnel{display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
+.pedal-fcol{background:var(--app-bg); border-radius:14px; padding:10px; min-width:0;}
+.pedal-fempty{font:600 12px var(--ui); color:var(--line); text-align:center; padding:10px 0;}
+
+/* filtros */
+.pedal-filters{display:flex; flex-direction:column; gap:12px; background:var(--app-bg); border-radius:14px; padding:14px;}
+.pedal-filterrow{display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+.pedal-filterlbl{font:700 11px var(--ui); letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); width:104px; flex-shrink:0;}
+.pedal-select{height:38px; border-radius:10px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font:600 13px var(--ui); padding:0 12px; outline:none; min-width:180px;}
+.pedal-select:focus{border-color:var(--primary);}
+.pedal-pick{display:inline-flex; align-items:center; gap:6px; padding:9px 13px; border-radius:11px; border:1.5px solid var(--line); background:var(--app-bg); font:600 13px var(--ui); color:var(--ink); transition:.14s;}
+.pedal-pick.on{border-color:var(--primary); background:var(--primary-soft); color:var(--primary-deep);}
+.pedal-pick.small{padding:6px 11px; font-size:12.5px;}
+.pedal-clearfilter{align-self:flex-start; font:600 12px var(--ui); color:var(--accent-deep); padding:4px 2px;}
+.pedal-clearfilter:hover{text-decoration:underline;}
+
+/* linhas de lista genéricas */
+.pedal-listrow{display:flex; align-items:center; gap:11px; width:100%; background:var(--app-bg); border:1px solid var(--line); border-radius:13px; padding:10px 13px; transition:.14s; text-align:left;}
+.pedal-listrow:hover{border-color:var(--primary); transform:translateY(-1px);}
+
+/* export */
+.pedal-exportbtn{display:flex; align-items:center; gap:7px; height:40px; padding:0 14px; border-radius:11px; border:1.5px solid var(--primary); background:var(--surface); color:var(--primary-deep); font:700 13px var(--ui); transition:.15s;}
+.pedal-exportbtn:hover{background:var(--primary-soft);}
+.pedal-exportbtn.small{height:32px; padding:0 11px; font-size:12px; border-width:1px;}
+.pedal-exporthint{font:500 11px/1.45 var(--ui); color:var(--ink-soft); padding:6px 12px 8px; border-bottom:1px solid var(--line); margin-bottom:4px;}
+.pedal-exportmenu{position:absolute; top:48px; right:0; z-index:50; width:248px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:6px; box-shadow:0 20px 50px rgba(0,0,0,.18);}
+.pedal-exportitem{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:10px 12px; border-radius:9px; font:600 13px var(--ui); color:var(--ink); text-align:left; transition:.12s;}
+.pedal-exportitem:hover{background:var(--app-bg);}
+.pedal-exportcount{font:700 11px var(--ui); color:var(--ink-soft); background:var(--app-bg); border:1px solid var(--line); border-radius:99px; padding:1px 8px;}
+.pedal-exportitem:hover .pedal-exportcount{background:var(--surface);}
+
+/* transcrição */
+.pedal-transcript{margin-top:10px; max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:7px; background:var(--app-bg); border-radius:12px; padding:12px;}
+.pedal-tmsg{font:500 12.5px/1.45 var(--ui); padding:8px 11px; border-radius:10px; max-width:88%;}
+.pedal-tmsg .pedal-tfrom{display:block; font:800 9.5px var(--ui); letter-spacing:.06em; text-transform:uppercase; opacity:.6; margin-bottom:2px;}
+.pedal-tmsg.agent{background:var(--surface); border:1px solid var(--line); color:var(--ink); align-self:flex-start;}
+.pedal-tmsg.user{background:var(--primary); color:#fff; align-self:flex-end;}
+.pedal-tmsg.sys{background:var(--accent-soft); color:var(--accent-deep); align-self:center; font-weight:700; text-align:center;}
+
+/* pedidos de contacto */
+.pedal-contactcard{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:15px; box-shadow:0 2px 10px rgba(0,0,0,.04); transition:.15s;}
+.pedal-contactcard.done{opacity:.62;}
+.pedal-contactq{background:var(--app-bg); border-radius:12px; padding:11px 13px; margin-top:11px;}
+
+/* botão-ícone redondo */
+.pedal-iconbtn{width:30px; height:30px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--surface); color:var(--ink-soft); border:1px solid var(--line); font-size:13px; transition:.14s;}
+.pedal-iconbtn:hover{background:var(--accent-soft); color:var(--accent-deep); border-color:var(--accent-soft);}
+
+/* atribuição de formador */
+.pedal-traineropt{display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:var(--app-bg); border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; transition:.14s;}
+.pedal-traineropt:hover{border-color:var(--primary);}
+.pedal-traineropt.on{border-color:var(--primary); background:var(--primary-soft);}
+.pedal-traineravsm{width:32px; height:32px; border-radius:50%; flex-shrink:0; background:var(--accent-soft); color:var(--accent-deep); display:flex; align-items:center; justify-content:center; font:800 11px var(--ui);}
+.pedal-traineropt.on .pedal-traineravsm{background:var(--primary); color:#fff;}
+.pedal-trainertag{display:inline-flex; align-items:center; gap:6px; font:700 11.5px var(--ui); color:var(--accent-deep); background:var(--accent-soft); border-radius:8px; padding:3px 9px;}
+.pedal-slotconfirm{display:flex; flex-wrap:wrap; gap:7px;}
+
+/* login coordenação */
+.pedal-autherr{display:flex; gap:7px; align-items:flex-start; font:600 12px/1.45 var(--ui); color:var(--accent-deep); background:var(--accent-soft); border-radius:10px; padding:9px 11px; margin-bottom:10px;}
+.pedal-autherr svg{flex-shrink:0; margin-top:1px;}
+.pedal-authlogo{width:88px; height:88px; border-radius:28px; background:var(--surface); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(0,0,0,.06);}
+.pedal-btn{padding:12px 16px; border-radius:12px; font:700 14px var(--ui); transition:.15s;}
+.pedal-btn.primary{background:var(--primary); color:#fff;}
+.pedal-btn.primary:not(:disabled):hover{background:var(--primary-deep);}
+.pedal-btn:disabled{cursor:default; opacity:.5;}
+.pedal-input{width:100%; height:44px; border-radius:11px; border:1.5px solid var(--line); padding:0 14px; font:500 14px var(--ui); color:var(--ink); background:var(--app-bg); outline:none;}
+.pedal-input:focus{border-color:var(--primary);}
+
+/* conteúdos de formação (coordenação) */
+.pedal-modadmin{display:flex; flex-direction:column; gap:10px;}
+.pedal-modadminrow{background:var(--app-bg); border:1px solid var(--line); border-radius:13px; padding:12px 13px;}
+.pedal-uploadbtn{display:flex; align-items:center; gap:8px; width:100%; padding:11px 13px; border-radius:11px; border:1.5px dashed var(--line); background:var(--surface); color:var(--ink-soft); font:700 12.5px var(--ui); transition:.14s;}
+.pedal-uploadbtn:hover{border-color:var(--primary); color:var(--primary-deep);}
+.pedal-videochip{display:inline-flex; align-items:center; gap:7px; font:600 12.5px var(--ui); color:var(--ink); background:var(--app-bg); border:1px solid var(--line); border-radius:10px; padding:8px 11px;}
+.pedal-agentinfo{width:100%; border-radius:11px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font:500 13px/1.5 var(--ui); padding:10px 12px; outline:none; resize:vertical; min-height:64px;}
+.pedal-agentinfo:focus{border-color:var(--primary);}
+
+@media (max-width:760px){
+  .pedal-metrics{grid-template-columns:repeat(2,1fr);}
+  .pedal-dashgrid{grid-template-columns:1fr;}
+  .pedal-opsgrid{grid-template-columns:1fr;}
+  .pedal-gestao{grid-template-columns:1fr;}
+  .pedal-statgrid{grid-template-columns:repeat(2,1fr);}
+  .pedal-tasksgrid{grid-template-columns:1fr;}
+  .pedal-brandmini span{display:none;}
+}
+/* ── Availability grid ─────────────────────────────────────── */
+.pedal-avail-grid{display:grid; gap:2px; margin-top:4px;}
+.pedal-avail-header{display:grid; grid-template-columns:40px repeat(3,1fr); gap:2px; margin-bottom:2px;}
+.pedal-avail-col-head{font:600 11px var(--ui); color:var(--ink-soft); text-align:center; padding:3px 0;}
+.pedal-avail-row{display:grid; grid-template-columns:40px repeat(3,1fr); gap:2px;}
+.pedal-avail-day{font:600 12px var(--ui); color:var(--ink-soft); display:flex; align-items:center; padding-left:2px;}
+.pedal-avail-cell{height:30px; border-radius:7px; border:1.5px solid var(--line); background:var(--app-bg); cursor:pointer; transition:.12s;}
+.pedal-avail-cell.on{border-color:var(--primary); background:var(--primary-soft);}
+.pedal-avail-cell.readonly{cursor:default; pointer-events:none;}
+.pedal-avail-cell.on.readonly{background:var(--primary-soft); border-color:var(--primary);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Define modo coordenação antes de carregar os scripts -->
+<script>window.__PEDAL_MODE = 'coord';</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="pedal-logo.js"></script>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="pedal-data.jsx"></script>
+<script type="text/babel" src="pedal-ui.jsx"></script>
+<script type="text/babel" src="pedal-auth.jsx"></script>
+<script type="text/babel" src="pedal-coord-formacao.jsx"></script>
+<script type="text/babel" src="pedal-dashboard.jsx"></script>
+<script type="text/babel" src="pedal-app.jsx"></script>
+</body>
+</html>

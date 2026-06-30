@@ -506,6 +506,7 @@ function WaitingList({ ctx }) {
                   if (c.live) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
                   else { store.setOverride(c.id, 'validacao'); }
                   store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
+                  setSel(null);
                 }}>Retomar</button>
               </div>
             );
