@@ -22,6 +22,7 @@ function ChatView({ store, tone = 'caloroso' }) {
   const valTimer = useRefC();
   const scrollRef = useRefC();
   const genRef = useRefC(0);
+  const triageResultRef = useRefC(null); // fresh match result from triage submit (avoids stale S.candidate)
 
   const { addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up } = store;
   const locOf = (id) => P.LOCALITIES.find((l) => l.id === id) || P.LOCALITIES[0];
@@ -57,10 +58,9 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'collect': return [{ text: 'Primeiro, fico a conhecer-te.' }];
       case 'triage': return [{ text: `Prazer, ${first || 'bem-vindo'}! 🙌 Agora diz-me onde e quando gostarias de pedalar.` }];
       case 'triage_result': {
-        const ids = (c.localities && c.localities.length ? c.localities : [c.locality]);
-        const sel = ids.map(locOf);
-        const open = sel.filter((l) => P.needMatch(S.needs, l.name, c.periods));
-        const closed = sel.filter((l) => !P.needMatch(S.needs, l.name, c.periods));
+        const r = triageResultRef.current || {};
+        const open = r.open || [];
+        const closed = r.closed || [];
         const names = (arr) => arr.map((l) => l.name).join(', ');
         if (open.length) {
           const lines = [{ text: `Boa notícia! 🎉 Há procura de pilotos em ${names(open)} compatível com a tua disponibilidade.` }];
@@ -69,7 +69,7 @@ function ChatView({ store, tone = 'caloroso' }) {
           return lines;
         }
         return [
-          { text: `Neste momento não há vaga compatível em ${names(sel)} com a tua disponibilidade. 🙏` },
+          { text: `Neste momento não há vaga compatível em ${names([...open, ...closed])} com a tua disponibilidade. 🙏` },
           { text: 'Ficaste automaticamente em lista de espera — avisamos-te assim que surgir uma necessidade compatível na tua zona. 💛' },
         ];
       }
@@ -115,8 +115,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'collect': return { type: 'form_profile' };
       case 'triage': return { type: 'triage' };
       case 'triage_result': {
-        const ids = (S.candidate.localities && S.candidate.localities.length ? S.candidate.localities : [S.candidate.locality]);
-        const anyOpen = ids.map(locOf).some((l) => P.needMatch(S.needs, l.name, S.candidate.periods));
+        const anyOpen = (triageResultRef.current && triageResultRef.current.open && triageResultRef.current.open.length > 0);
         return anyOpen
           ? { type: 'quick', options: [{ label: 'Começar entrevista →', go: 'interview', accent: 'fill' }, { label: 'Tenho uma dúvida', action: 'askPedal' }] }
           : { type: 'quick', options: [{ label: 'Escolher outras zonas', go: 'triage' }] };
@@ -144,11 +143,11 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'present': setStage('apresentacao'); break;
       case 'interview': setStage('entrevista'); setChat({ interviewStep: 0 }); break;
       case 'triage_result': {
-        const ids = (S.candidate.localities && S.candidate.localities.length ? S.candidate.localities : [S.candidate.locality]);
-        const sel = ids.map(locOf);
-        const open = sel.filter((l) => P.needMatch(S.needs, l.name, S.candidate.periods));
+        const r = triageResultRef.current || {};
+        const open = r.open || [];
+        const allSel = [...open, ...(r.closed || [])];
         if (open.length) notify({ type: 'qualificado', text: `é elegível em ${open.map((l) => l.name).join(', ')} — pode avançar para entrevista` });
-        else { setStage('espera'); notify({ type: 'espera', text: `ficou em lista de espera (${sel.map((l) => l.name).join(', ')})` }); }
+        else { setStage('espera'); notify({ type: 'espera', text: `ficou em lista de espera (${allSel.map((l) => l.name).join(', ')})` }); }
         break;
       }
       case 'await_validation': setStage('validacao'); break;
@@ -494,7 +493,13 @@ function ChatView({ store, tone = 'caloroso' }) {
     if (it.type === 'triage') return <TriageForm localities={P.LOCALITIES} onSubmit={(d) => {
       patchCandidate({ localities: d.localities, locality: d.locality, periods: d.periods, availability: d.availability });
       setStage('triagem');
-      const selNames = (d.localities && d.localities.length ? d.localities : [d.locality]).map((id) => locOf(id).name).join(', ');
+      // Compute match NOW with fresh d.periods — S.candidate is still stale (async React update)
+      const locIds = d.localities && d.localities.length ? d.localities : [d.locality];
+      const sel = locIds.map((id) => locOf(id));
+      const open = sel.filter((l) => P.needMatch(S.needs, l.name, d.periods));
+      const closed = sel.filter((l) => !P.needMatch(S.needs, l.name, d.periods));
+      triageResultRef.current = { open, closed };
+      const selNames = locIds.map((id) => locOf(id).name).join(', ');
       const availText = d.availability.map((a) => {
         const dayName = (P.WEEKDAYS.find((x) => x.id === a.day) || {}).name || a.day;
         const perName = (P.PERIODS.find((x) => x.id === a.period) || {}).name || a.period;
