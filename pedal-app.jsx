@@ -1,6 +1,6 @@
 /* pedal-app.jsx — shell, store partilhado, persistência, navegação e Tweaks */
 
-const { useState: useStateA, useEffect: useEffectA } = React;
+const { useState: useStateA, useEffect: useEffectA, useRef: useRefA } = React;
 
 const STORE_KEY = 'pedal_v3';
 const INITIAL = {
@@ -48,14 +48,43 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [S, setS] = useStateA(loadStore);
-  const [view, setView] = useStateA('candidate');
+  const [view, setView] = useStateA(window.__PEDAL_MODE === 'coord' ? 'coordination' : 'candidate');
   const [resetKey, setResetKey] = useStateA(0);
   const [scale, setScale] = useStateA(1);
   const [coordJwt, setCoordJwtRaw] = useStateA(null); // não persiste no localStorage
   const [realCandidates, setRealCandidates] = useStateA(null);
   const [candidateJwt, setCandidateJwtRaw] = useStateA(null);
+  const msgSyncTimer = useRefA();
 
   useEffectA(() => { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }, [S]);
+
+  // Sincronização em tempo real entre separadores (candidato ↔ coordenação)
+  useEffectA(() => {
+    const onStorage = (e) => {
+      if (e.key === STORE_KEY && e.newValue) {
+        try { setS(JSON.parse(e.newValue)); } catch (_) {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // Guarda mensagens na BD sempre que mudam (debounced 1.5s) — restauro em qualquer dispositivo
+  useEffectA(() => {
+    clearTimeout(msgSyncTimer.current);
+    if (!S.candidateId || !candidateJwt || !S.messages.length) return;
+    msgSyncTimer.current = setTimeout(() => {
+      console.log('[PEDAL] a guardar', S.messages.length, 'mensagens na BD...');
+      fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${candidateJwt}` },
+        body: JSON.stringify({ chat_messages: S.messages }),
+      })
+        .then((r) => r.json())
+        .then(() => console.log('[PEDAL] mensagens guardadas ✓'))
+        .catch((e) => console.error('[PEDAL] erro ao guardar mensagens:', e));
+    }, 1500);
+  }, [S.messages, candidateJwt]);
 
   // Re-autentica na carga da página se já tem credenciais guardadas mas não tem JWT
   useEffectA(() => {
@@ -76,7 +105,7 @@ function App() {
       fetch('http://localhost:3001/api/candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null, cc: S.candidate.cc || null, password: S.account.password }),
+        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null, cc: S.candidate.cc || null, profissao: S.candidate.profissao || null, password: S.account.password }),
       })
         .then((r) => r.json())
         .then(async (data) => {
@@ -169,7 +198,7 @@ function App() {
           const parts = (c.name || '').split(' ');
           const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
           const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
-          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods: c.periods ? c.periods.split(', ').filter(Boolean) : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
+          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods: c.periods ? c.periods.split(', ').filter(Boolean) : [], availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
         }));
       })
       .catch(() => {});
@@ -191,6 +220,9 @@ function App() {
       const names = S.candidate.localities.map((id) => locs ? ((locs.find((l) => l.id === id) || {}).name || id) : id).join(', ');
       fetch(base, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ locality: names }) }).catch(() => {});
     }
+    if (S.candidate.availability && S.candidate.availability.length) {
+      fetch(base, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ availability: S.candidate.availability }) }).catch(() => {});
+    }
   }, [S.stage, candidateJwt]);
 
   // — Fase 4: locais de encontro, utilizadores de gestão e perfil da coordenação —
@@ -205,7 +237,7 @@ function App() {
   const removeNeed = (id) => setS((p) => ({ ...p, needs: (p.needs || []).filter((n) => n.id !== id) }));
   const reset = () => { localStorage.removeItem(STORE_KEY); setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, trainers: INITIAL.trainers.map((t) => ({ ...t })), contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, moduleContent: {}, stations: INITIAL.stations.map((s) => ({ ...s })), mgmtUsers: INITIAL.mgmtUsers.map((u) => ({ ...u })), needs: INITIAL.needs.map((n) => ({ ...n })), coordProfile: { ...INITIAL.coordProfile }, moduleConversations: {} }); setResetKey((k) => k + 1); };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, realCandidates, candidateJwt };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, realCandidates, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;
@@ -228,10 +260,6 @@ function App() {
     <div className="pedal-stage" style={themeVars}>
       <div className="pedal-topbar">
         <div className="pedal-brandmini"><img src={window.__PEDAL_LOGO} alt="Pedalar Sem Idade Porto" className="pedal-logo" /><span className="pedal-brandsep">·</span><PedalMark size={20} color="var(--primary)" /><span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>PEDAL<em style={{ font: '400 9.5px var(--ui)', fontStyle: 'italic', color: 'var(--ink-soft)', letterSpacing: 0, fontWeight: 400 }}>Direito a vento no cabelo</em></span></div>
-        <div className="pedal-seg">
-          <button className={view === 'candidate' ? 'on' : ''} onClick={() => setView('candidate')}><Icon name="chat" size={15} />Candidato</button>
-          <button className={view === 'coordination' ? 'on' : ''} onClick={() => setView('coordination')}><Icon name="people" size={15} />Coordenação</button>
-        </div>
         <button className="pedal-reset" onClick={reset} title="Recomeçar a demonstração">Recomeçar</button>
       </div>
 
@@ -270,7 +298,7 @@ function App() {
         <CoordLoginScreen store={store} />
       )}
 
-      <TweaksPanel>
+      {view === 'candidate' && <TweaksPanel>
         <TweakSection label="Tom de voz do PEDAL" />
         <TweakRadio label="Tom" value={t.tone} options={['Caloroso', 'Profissional', 'Direto']} onChange={(v) => setTweak('tone', v)} />
         <TweakSection label="Acessibilidade" />
@@ -282,7 +310,7 @@ function App() {
           ['#161616', '#ECECEC', '#000000'],
           ['#3A6EA5', '#E2ECF6', '#264C75'],
         ]} onChange={(v) => setTweak('palette', v)} />
-      </TweaksPanel>
+      </TweaksPanel>}
     </div>
   );
 }
