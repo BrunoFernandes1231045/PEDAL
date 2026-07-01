@@ -198,7 +198,10 @@ function App() {
           const parts = (c.name || '').split(' ');
           const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
           const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
-          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods: c.periods ? c.periods.split(', ').filter(Boolean) : [], availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
+          const perData = window.PEDAL && window.PEDAL.PERIODS;
+          const rawPeriods = c.periods ? c.periods.split(', ').filter(Boolean) : [];
+          const periods = rawPeriods.map((p) => { const f = perData && perData.find((x) => x.name === p); return f ? f.id : p; });
+          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods, availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
         }));
       })
       .catch(() => {});
