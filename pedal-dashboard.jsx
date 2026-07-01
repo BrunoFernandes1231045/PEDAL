@@ -72,8 +72,10 @@ function Dashboard({ store }) {
   const seedList = P.SEED_CANDIDATES.map((c) => ({ ...c, stage: S.overrides[c.id] || c.stage, localityId: (P.LOCALITIES.find((l) => l.name === c.locality) || {}).id }));
   const candidates = [...(live ? [live] : []), ...(store.realCandidates !== null ? store.realCandidates : seedList)];
 
+  const isLiveCandidate = (c) => c.live || c.id === S.candidateId;
+
   function validate(c) {
-    if (c.live) { store.up({ validated: true }); store.setStage('onboarding'); }
+    if (isLiveCandidate(c)) { store.up({ validated: true }); store.setStage('onboarding'); }
     else { store.setOverride(c.id, 'onboarding'); }
     store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
   }
@@ -504,7 +506,7 @@ function WaitingList({ ctx }) {
                   </div>
                 </button>
                 <button className="pedal-taskbtn" onClick={() => {
-                  if (c.live) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
+                  if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
                   else { store.setOverride(c.id, 'validacao'); }
                   store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
                   setSel(null);
@@ -1082,7 +1084,7 @@ function SchedulingModal({ c, store, onClose }) {
             </div>
           </div>
         )}
-        <p className="pedal-tasknote" style={{ marginTop: 12 }}>{c.live ? 'O voluntário vê as opções na app e escolhe uma. O formador acompanha-o no dia.' : 'As propostas ficam registadas para este candidato.'}</p>
+        <p className="pedal-tasknote" style={{ marginTop: 12 }}>{isLiveC ? 'O voluntário vê as opções na app e escolhe uma. O formador acompanha-o no dia.' : 'As propostas ficam registadas para este candidato.'}</p>
       </div>
     </div>
   );
@@ -1093,14 +1095,15 @@ function CandidateDetail({ c, store, onClose }) {
   const [showChat, setShowChat] = useStateD(false);
   const [rejecting, setRejecting] = useStateD(false);
   const [reason, setReason] = useStateD('');
+  const isLiveC = c.live || c.id === store.S.candidateId;
   const curIdx = P.stageIndex(c.stage);
   const iv = c.interview || {};
   const ivLabels = { exp: 'Experiência', triciclo: 'Triciclo', carta: 'Carta', nif: 'NIF (seguro)', motivacao: 'Motivação' };
   const age = c.dob ? Math.floor((Date.now() - new Date(c.dob).getTime()) / 3.15576e10) : null;
-  const transcript = c.live ? store.S.messages.filter((m) => m.text) : [];
+  const transcript = isLiveC ? store.S.messages.filter((m) => m.text) : [];
 
   function doReject() {
-    if (c.live) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); } else { store.setOverride(c.id, 'rejeitado'); }
+    if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); } else { store.setOverride(c.id, 'rejeitado'); }
     store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
     onClose();
   }
@@ -1115,7 +1118,7 @@ function CandidateDetail({ c, store, onClose }) {
             <div style={{ font: '800 19px var(--display)', color: 'var(--ink)' }}>{c.name}</div>
             <div style={{ font: '500 13px var(--ui)', color: 'var(--ink-soft)' }}>{c.locality} · via {c.source}</div>
           </div>
-          {c.live && <span style={{ marginLeft: 'auto' }}><Pill tone="green"><span className="pedal-livedot" style={{ position: 'static' }} />Em direto</Pill></span>}
+          {isLiveC && <span style={{ marginLeft: 'auto' }}><Pill tone="green"><span className="pedal-livedot" style={{ position: 'static' }} />Em direto</Pill></span>}
         </div>
 
         <div className="pedal-detailgrid">
@@ -1179,7 +1182,7 @@ function CandidateDetail({ c, store, onClose }) {
           </div>
         )}
 
-        {c.live && transcript.length > 0 && (
+        {isLiveC && transcript.length > 0 && (
           <div style={{ marginTop: 16 }}>
             <button className="pedal-taskbtn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowChat((v) => !v)}>
               <Icon name="chat" size={14} />{showChat ? 'Ocultar conversa' : 'Ver conversa com o agente'}
@@ -1203,7 +1206,7 @@ function CandidateDetail({ c, store, onClose }) {
               <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setRejecting(true)}>Rejeitar</button>
               <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }}
                 onClick={() => {
-                  if (c.live) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
+                  if (isLiveC) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
                   else { store.setOverride(c.id, 'espera'); }
                   store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
                   onClose();
@@ -1211,7 +1214,7 @@ function CandidateDetail({ c, store, onClose }) {
             </div>
             <button className="pedal-btn primary" style={{ width: '100%' }}
               onClick={() => {
-                if (c.live) { store.up({ validated: true }); store.setStage('onboarding'); }
+                if (isLiveC) { store.up({ validated: true }); store.setStage('onboarding'); }
                 else { store.setOverride(c.id, 'onboarding'); }
                 store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
                 onClose();
