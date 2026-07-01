@@ -61,7 +61,8 @@ function Dashboard({ store }) {
 
   // candidato em direto (a partir do chat)
   const liveActive = !!S.stage;
-  const live = liveActive ? {
+  const alreadyInBackend = S.candidateId && store.realCandidates !== null && store.realCandidates.some((c) => c.id === S.candidateId);
+  const live = liveActive && !alreadyInBackend ? {
     id: 'live', name: S.candidate.name || 'Novo candidato',
     locality: ((S.candidate.localities && S.candidate.localities.length ? S.candidate.localities : [S.candidate.locality]).map((id) => (P.LOCALITIES.find((l) => l.id === id) || {}).name).filter(Boolean).join(', ')) || '—',
     localityId: (S.candidate.localities && S.candidate.localities[0]) || S.candidate.locality,
