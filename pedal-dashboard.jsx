@@ -1199,8 +1199,8 @@ function CandidateDetail({ c, store, onClose }) {
         {c.stage === 'validacao' && !rejecting && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 18 }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setRejecting(true)}>Rejeitar</button>
-              <button className="pedal-btn ghost" style={{ flex: 1 }}
+              <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setRejecting(true)}>Rejeitar</button>
+              <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }}
                 onClick={() => {
                   if (c.live) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
                   else { store.setOverride(c.id, 'espera'); }
