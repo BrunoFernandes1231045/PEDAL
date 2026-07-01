@@ -1197,16 +1197,18 @@ function CandidateDetail({ c, store, onClose }) {
         )}
 
         {c.stage === 'validacao' && !rejecting && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-            <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setRejecting(true)}>Rejeitar</button>
-            <button className="pedal-btn ghost" style={{ flex: 1 }}
-              onClick={() => {
-                if (c.live) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
-                else { store.setOverride(c.id, 'espera'); }
-                store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
-                onClose();
-              }}>Lista de espera</button>
-            <button className="pedal-btn primary" style={{ flex: 1 }}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 18 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setRejecting(true)}>Rejeitar</button>
+              <button className="pedal-btn ghost" style={{ flex: 1 }}
+                onClick={() => {
+                  if (c.live) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
+                  else { store.setOverride(c.id, 'espera'); }
+                  store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
+                  onClose();
+                }}>Lista de espera</button>
+            </div>
+            <button className="pedal-btn primary" style={{ width: '100%' }}
               onClick={() => {
                 if (c.live) { store.up({ validated: true }); store.setStage('onboarding'); }
                 else { store.setOverride(c.id, 'onboarding'); }
