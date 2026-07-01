@@ -1084,7 +1084,7 @@ function SchedulingModal({ c, store, onClose }) {
             </div>
           </div>
         )}
-        <p className="pedal-tasknote" style={{ marginTop: 12 }}>{isLiveC ? 'O voluntário vê as opções na app e escolhe uma. O formador acompanha-o no dia.' : 'As propostas ficam registadas para este candidato.'}</p>
+        <p className="pedal-tasknote" style={{ marginTop: 12 }}>{(c.live || c.id === store.S.candidateId) ? 'O voluntário vê as opções na app e escolhe uma. O formador acompanha-o no dia.' : 'As propostas ficam registadas para este candidato.'}</p>
       </div>
     </div>
   );
