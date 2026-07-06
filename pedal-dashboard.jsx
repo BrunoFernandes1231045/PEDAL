@@ -759,18 +759,26 @@ function ActivePilots({ ctx }) {
 // ── Exportação (Excel/CSV) ──────────────────────────────────────────
 function exportCandidates(rows, store, fileId) {
   const P = window.PEDAL;
-  const cols = ['Nome', 'Email', 'Telefone', 'Data de nascimento', 'Localidade', 'Estado', 'Disponibilidade', 'Dias da semana', 'Data de contacto', 'Agendamento formação', 'Formador', 'Origem'];
+  const cols = ['Nome', 'Email', 'Telefone', 'Data de nascimento', 'Localidade', 'Estado', 'Disponibilidade', 'Data de contacto', 'Agendamento formação', 'Formador', 'Origem'];
   const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const lines = [cols.join(';')];
   rows.forEach((c) => {
-    const sc = store.S.scheduling[c.id];
-    const ag = sc && sc.chosen != null && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
+    // scheduling: tenta pelo id real e pelo id antigo 'live'
+    const sc = store.S.scheduling[c.id] || store.S.scheduling['live'] || null;
+    const ag = sc && sc.chosen != null && sc.slots && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
     const trainer = sc && sc.trainerId ? ((store.S.trainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
-    const per = (c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ');
-    const wd = (c.weekdays || []).map((d) => (P.WEEKDAYS.find((x) => x.id === d) || {}).name).join(', ');
-    lines.push([c.name, c.email, c.contact, c.dob, c.locality, P.stageLabel(c.stage), per, wd, c.contactDate, ag, trainer, c.source].map(esc).join(';'));
+    // disponibilidade: usa availability (período+local) se disponível, senão periods
+    const avail = Array.isArray(c.availability) && c.availability.length
+      ? c.availability.map((a) => {
+          const pName = (P.PERIODS.find((x) => x.id === a.period) || {}).name || a.period;
+          const lName = (P.LOCALITIES.find((x) => x.id === a.locality) || {}).name || a.locality;
+          return `${pName} (${lName})`;
+        }).join(', ')
+      : (c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name || p).join(', ');
+    const locality = c.locality === '—' ? '' : (c.locality || '');
+    lines.push([c.name, c.email, c.contact, c.dob, locality, P.stageLabel(c.stage), avail, c.contactDate, ag, trainer, c.source].map(esc).join(';'));
   });
-  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = `pedal-${fileId}.csv`; document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
