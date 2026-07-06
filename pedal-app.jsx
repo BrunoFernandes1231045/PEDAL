@@ -277,7 +277,7 @@ function App() {
     <div className="pedal-stage" style={themeVars}>
       <div className="pedal-topbar">
         <div className="pedal-brandmini"><img src={window.__PEDAL_LOGO} alt="Pedalar Sem Idade Porto" className="pedal-logo" /><span className="pedal-brandsep">·</span><PedalMark size={20} color="var(--primary)" /><span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>PEDAL<em style={{ font: '400 9.5px var(--ui)', fontStyle: 'italic', color: 'var(--ink-soft)', letterSpacing: 0, fontWeight: 400 }}>Direito a vento no cabelo</em></span></div>
-        <button className="pedal-reset" onClick={reset} title="Recomeçar a demonstração">Recomeçar</button>
+        {window.__PEDAL_MODE !== 'coord' && <button className="pedal-reset" onClick={reset} title="Recomeçar a demonstração">Recomeçar</button>}
       </div>
 
       {view === 'candidate' ? (
