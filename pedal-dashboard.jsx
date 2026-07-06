@@ -763,8 +763,7 @@ function exportCandidates(rows, store, fileId) {
   const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const lines = [cols.join(';')];
   rows.forEach((c) => {
-    // scheduling: tenta pelo id real e pelo id antigo 'live'
-    const sc = store.S.scheduling[c.id] || store.S.scheduling['live'] || null;
+    const sc = store.S.scheduling[c.id] || null;
     const ag = sc && sc.chosen != null && sc.slots && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
     const trainer = sc && sc.trainerId ? ((store.S.trainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
     // disponibilidade: usa availability (período+local) se disponível, senão periods
