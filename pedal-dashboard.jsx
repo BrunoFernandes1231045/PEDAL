@@ -766,12 +766,12 @@ function exportCandidates(rows, store, fileId) {
     const sc = store.S.scheduling[c.id] || null;
     const ag = sc && sc.chosen != null && sc.slots && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
     const trainer = sc && sc.trainerId ? ((store.S.trainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
-    // disponibilidade: usa availability (período+local) se disponível, senão periods
+    // disponibilidade: usa availability (dia+período) se disponível, senão periods
     const avail = Array.isArray(c.availability) && c.availability.length
       ? c.availability.map((a) => {
+          const dName = (P.WEEKDAYS.find((x) => x.id === a.day) || {}).name || a.day;
           const pName = (P.PERIODS.find((x) => x.id === a.period) || {}).name || a.period;
-          const lName = (P.LOCALITIES.find((x) => x.id === a.locality) || {}).name || a.locality;
-          return `${pName} (${lName})`;
+          return `${dName} ${pName.toLowerCase()}`;
         }).join(', ')
       : (c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name || p).join(', ');
     const locality = c.locality === '—' ? '' : (c.locality || '');
