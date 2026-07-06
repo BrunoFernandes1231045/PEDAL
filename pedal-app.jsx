@@ -238,7 +238,21 @@ function App() {
   const addNeed = (n) => setS((p) => ({ ...p, needs: [...(p.needs || []), { id: 'nd' + Math.random().toString(36).slice(2, 8), ...n }] }));
   const updateNeed = (id, patch) => setS((p) => ({ ...p, needs: (p.needs || []).map((n) => (n.id === id ? { ...n, ...patch } : n)) }));
   const removeNeed = (id) => setS((p) => ({ ...p, needs: (p.needs || []).filter((n) => n.id !== id) }));
-  const reset = () => { localStorage.removeItem(STORE_KEY); setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, trainers: INITIAL.trainers.map((t) => ({ ...t })), contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, moduleContent: {}, stations: INITIAL.stations.map((s) => ({ ...s })), mgmtUsers: INITIAL.mgmtUsers.map((u) => ({ ...u })), needs: INITIAL.needs.map((n) => ({ ...n })), coordProfile: { ...INITIAL.coordProfile }, moduleConversations: {} }); setResetKey((k) => k + 1); };
+  const reset = () => {
+    // Preservar configuração da coordenação — o reset só reinicia o fluxo do candidato
+    const coordData = {
+      moduleContent: S.moduleContent || {},
+      trainers: S.trainers && S.trainers.length ? S.trainers : INITIAL.trainers.map((t) => ({ ...t })),
+      stations: S.stations && S.stations.length ? S.stations : INITIAL.stations.map((s) => ({ ...s })),
+      needs: S.needs && S.needs.length ? S.needs : INITIAL.needs.map((n) => ({ ...n })),
+      mgmtUsers: S.mgmtUsers && S.mgmtUsers.length ? S.mgmtUsers : INITIAL.mgmtUsers.map((u) => ({ ...u })),
+      coordProfile: { ...INITIAL.coordProfile, ...(S.coordProfile || {}) },
+      moduleConversations: S.moduleConversations || {},
+    };
+    localStorage.removeItem(STORE_KEY);
+    setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, ...coordData });
+    setResetKey((k) => k + 1);
+  };
 
   const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, realCandidates, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView };
 
