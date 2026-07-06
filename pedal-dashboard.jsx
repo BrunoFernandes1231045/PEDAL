@@ -759,7 +759,7 @@ function ActivePilots({ ctx }) {
 // ── Exportação (Excel/CSV) ──────────────────────────────────────────
 function exportCandidates(rows, store, fileId) {
   const P = window.PEDAL;
-  const cols = ['Nome', 'Email', 'Telefone', 'Data de nascimento', 'Localidade', 'Estado', 'Disponibilidade', 'Data de contacto', 'Agendamento formação', 'Formador', 'Origem'];
+  const cols = ['Nome', 'Email', 'Telefone', 'Data de nascimento', 'CC', 'NIF', 'Profissão', 'Localidade', 'Estado', 'Disponibilidade', 'Data de contacto', 'Agendamento formação', 'Formador', 'Origem'];
   const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const lines = [cols.join(';')];
   rows.forEach((c) => {
@@ -775,7 +775,7 @@ function exportCandidates(rows, store, fileId) {
         }).join(', ')
       : (c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name || p).join(', ');
     const locality = c.locality === '—' ? '' : (c.locality || '');
-    lines.push([c.name, c.email, c.contact, c.dob, locality, P.stageLabel(c.stage), avail, c.contactDate, ag, trainer, c.source].map(esc).join(';'));
+    lines.push([c.name, c.email, c.contact, c.dob, c.cc, c.nif, c.profissao, locality, P.stageLabel(c.stage), avail, c.contactDate, ag, trainer, c.source].map(esc).join(';'));
   });
   const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
