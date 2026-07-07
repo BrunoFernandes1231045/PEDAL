@@ -77,7 +77,7 @@ function Dashboard({ store }) {
 
   function validate(c) {
     if (isLiveCandidate(c)) { store.up({ validated: true }); store.setStage('onboarding'); }
-    else { store.setOverride(c.id, 'onboarding'); }
+    else { store.setOverride(c.id, 'onboarding'); store.patchRealCandidate(c.id, { stage: 'onboarding' }); }
     store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
   }
   const schedOf = (c) => S.scheduling[c.id] || null;
@@ -509,7 +509,7 @@ function WaitingList({ ctx }) {
                 </button>
                 <button className="pedal-taskbtn" onClick={() => {
                   if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
-                  else { store.setOverride(c.id, 'validacao'); }
+                  else { store.setOverride(c.id, 'validacao'); store.patchRealCandidate(c.id, { stage: 'validacao' }); }
                   store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
                   setSel(null);
                 }}>Retomar</button>
@@ -1122,7 +1122,7 @@ function CandidateDetail({ c, store, onClose }) {
   const transcript = isLiveC ? store.S.messages.filter((m) => m.text) : [];
 
   function doReject() {
-    if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); } else { store.setOverride(c.id, 'rejeitado'); }
+    if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); } else { store.setOverride(c.id, 'rejeitado'); store.patchRealCandidate(c.id, { stage: 'rejeitado' }); }
     store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
     onClose();
   }
@@ -1226,7 +1226,7 @@ function CandidateDetail({ c, store, onClose }) {
               <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }}
                 onClick={() => {
                   if (isLiveC) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
-                  else { store.setOverride(c.id, 'espera'); }
+                  else { store.setOverride(c.id, 'espera'); store.patchRealCandidate(c.id, { stage: 'espera' }); }
                   store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
                   onClose();
                 }}>Lista de espera</button>
@@ -1234,7 +1234,7 @@ function CandidateDetail({ c, store, onClose }) {
             <button className="pedal-btn primary" style={{ width: '100%' }}
               onClick={() => {
                 if (isLiveC) { store.up({ validated: true }); store.setStage('onboarding'); }
-                else { store.setOverride(c.id, 'onboarding'); }
+                else { store.setOverride(c.id, 'onboarding'); store.patchRealCandidate(c.id, { stage: 'onboarding' }); }
                 store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
                 onClose();
               }}>
