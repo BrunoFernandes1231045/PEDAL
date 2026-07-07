@@ -906,7 +906,13 @@ function TrainersAdmin({ ctx }) {
   const [f, setF] = useStateD({ name: '', dob: '', phone: '', email: '', locality: '' });
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim());
-  const valid = f.name.trim().length > 1 && f.dob && f.phone.trim().length > 6 && emailOk;
+  const activePilot = emailOk && store.realCandidates ? store.realCandidates.find((c) => c.email === f.email.trim() && c.stage === 'ativo') : null;
+  const emailError = emailOk && store.realCandidates && !activePilot ? 'Este email não corresponde a nenhum piloto ativo no sistema.' : null;
+  const onEmailChange = (v) => {
+    const pilot = store.realCandidates && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) ? store.realCandidates.find((c) => c.email === v.trim() && c.stage === 'ativo') : null;
+    setF((p) => ({ ...p, email: v, name: pilot ? pilot.name : p.name, phone: pilot ? pilot.contact : p.phone, dob: pilot ? (pilot.dob || '') : p.dob }));
+  };
+  const valid = f.name.trim().length > 1 && f.dob && f.phone.trim().length > 6 && emailOk && !emailError;
   const submit = () => { if (!valid) return; store.addTrainer({ name: f.name.trim(), dob: f.dob, phone: f.phone.trim(), email: f.email.trim(), locality: f.locality.trim() }); setF({ name: '', dob: '', phone: '', email: '', locality: '' }); };
   return (
     <div className="pedal-dashgrid">
@@ -958,9 +964,13 @@ function TrainersAdmin({ ctx }) {
       <div className="pedal-panel">
         <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Adicionar formador</span></div>
         <div style={{ display: 'grid', gap: 10 }}>
+          <FieldLite label="Email">
+            <input className="pedal-input" type="email" value={f.email} onChange={(e) => onEmailChange(e.target.value)} placeholder="nome@pedalarsemidade.pt" style={emailError ? { borderColor: 'var(--primary)' } : null} />
+            {emailError && <p style={{ font: '500 11.5px var(--ui)', color: 'var(--primary)', margin: '4px 0 0' }}>{emailError}</p>}
+            {activePilot && <p style={{ font: '500 11.5px var(--ui)', color: 'var(--accent-deep)', margin: '4px 0 0' }}>✓ Piloto ativo encontrado — dados preenchidos automaticamente.</p>}
+          </FieldLite>
           <FieldLite label="Nome"><input className="pedal-input" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome e apelido" /></FieldLite>
           <FieldLite label="Data de nascimento"><input className="pedal-input" type="date" value={f.dob} onChange={(e) => set('dob', e.target.value)} /></FieldLite>
-          <FieldLite label="Email"><input className="pedal-input" type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="nome@pedalarsemidade.pt" /></FieldLite>
           <FieldLite label="Telefone"><input className="pedal-input" type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="9XX XXX XXX" /></FieldLite>
           <FieldLite label="Território (opcional)">
             <select className="pedal-select" style={{ minWidth: 0, width: '100%' }} value={f.locality} onChange={(e) => set('locality', e.target.value)}>
