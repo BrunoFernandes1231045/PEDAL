@@ -214,9 +214,7 @@ PEDAL.SEED_TRAINERS = [
 ];
 
 // Pedidos de contacto (encaminhamento PEDAL → humano)
-PEDAL.SEED_CONTACTS = [
-  { id: 'cr1', name: 'Tomás Lopes', contact: '917 111 999', email: 'tomas.lopes@email.pt', question: 'Posso levar pessoas com cadeira de rodas elétrica no triciclo?', ago: 'há 1 h', status: 'novo' },
-];
+PEDAL.SEED_CONTACTS = [];
 
 // Locais de encontro / parqueamento das bicicletas (geridos pela coordenação) (Fase 4)
 PEDAL.SEED_STATIONS = [
