@@ -52,6 +52,7 @@ function App() {
   const [resetKey, setResetKey] = useStateA(0);
   const [scale, setScale] = useStateA(1);
   const [coordJwt, setCoordJwtRaw] = useStateA(null); // não persiste no localStorage
+  const [coordRole, setCoordRoleRaw] = useStateA(null); // 'coordenacao' | 'gestaoformacao' | 'administracao' | 'apoio'
   const [realCandidates, setRealCandidates] = useStateA(null);
   const [candidateJwt, setCandidateJwtRaw] = useStateA(null);
   const msgSyncTimer = useRefA();
@@ -184,7 +185,8 @@ function App() {
   const changePassword = (password) => setS((p) => ({ ...p, account: { ...(p.account || {}), password } }));
   const setModuleContent = (id, patch) => setS((p) => ({ ...p, moduleContent: { ...p.moduleContent, [id]: { ...(p.moduleContent[id] || {}), ...patch } } }));
   const setCoordJwt = (jwt) => setCoordJwtRaw(jwt);
-  const clearCoordJwt = () => { setCoordJwtRaw(null); setRealCandidates(null); };
+  const setCoordRole = (role) => setCoordRoleRaw(role);
+  const clearCoordJwt = () => { setCoordJwtRaw(null); setCoordRoleRaw(null); setRealCandidates(null); };
 
   useEffectA(() => {
     if (!coordJwt) { setRealCandidates(null); return; }
@@ -254,7 +256,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, realCandidates, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, realCandidates, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

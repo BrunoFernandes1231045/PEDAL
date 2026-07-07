@@ -115,10 +115,13 @@ function LoginPanel({ store }) {
       if (!res.ok) { setErr(data.error_description || 'Email ou palavra-passe incorretos.'); return; }
 
       const jwt = data.access_token;
-      const role = data.user && data.user.user_metadata && data.user.user_metadata.role;
+      const meta = (data.user && data.user.user_metadata) || {};
+      const role = meta.role;
+      const coordRole = meta.coord_role || 'coordenacao';
 
       if (role === 'coordinator') {
         if (window.__PEDAL_MODE === 'coord') {
+          store.setCoordRole(coordRole);
           store.setCoordJwt(jwt);
         } else {
           window.location.href = 'coordenacao.html';
