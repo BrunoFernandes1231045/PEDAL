@@ -443,6 +443,7 @@ function WaitingList({ ctx }) {
   const [per, setPer] = useStateD([]);
   const [wd, setWd] = useStateD([]);
   const toggle = (arr, set, id) => set(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
+  const isLiveCandidate = (c) => c.live || c.id === store.S.candidateId;
 
   let list = candidates.filter((c) => c.stage === 'espera');
   if (reg !== 'todas') list = list.filter((c) => c.localityId === reg);
