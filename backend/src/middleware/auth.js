@@ -7,7 +7,7 @@ async function requireAuth(req, res, next) {
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return res.status(401).json({ error: 'Token inválido' });
 
-  req.user = { id: user.id, role: user.user_metadata?.role || 'candidate' };
+  req.user = { id: user.id, role: user.user_metadata?.role || 'candidate', coord_role: user.user_metadata?.coord_role || 'coordenacao' };
   next();
 }
 
@@ -18,4 +18,14 @@ function requireCoordinator(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireCoordinator };
+function requireRole(roles) {
+  return (req, res, next) => {
+    const coordRole = req.user?.coord_role || 'coordenacao';
+    if (!roles.includes(coordRole)) {
+      return res.status(403).json({ error: 'Acesso não autorizado para este papel' });
+    }
+    next();
+  };
+}
+
+module.exports = { requireAuth, requireCoordinator, requireRole };

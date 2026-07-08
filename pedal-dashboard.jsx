@@ -50,11 +50,17 @@ function AvailabilityGrid({ value, onChange, readOnly }) {
 
 function Dashboard({ store }) {
   const S = store.S; const P = window.PEDAL;
+  const coordRole = store.coordRole || 'coordenacao';
+  const ROLE_TABS = { coordenacao: ['operacao', 'dashboards', 'gestao'], gestaoformacao: ['operacao', 'gestao'], administracao: ['dashboards', 'gestao'], apoio: ['operacao', 'dashboards', 'gestao'] };
+  const ROLE_GESTAO = { coordenacao: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'export'], gestaoformacao: ['formadores'], administracao: ['export'], apoio: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'export'] };
+  const allowedTabs = ROLE_TABS[coordRole] || ROLE_TABS.coordenacao;
+  const allowedGestao = ROLE_GESTAO[coordRole] || ROLE_GESTAO.coordenacao;
+  const readOnly = coordRole === 'apoio';
   const [sel, setSel] = useStateD(null);
   const [schedFor, setSchedFor] = useStateD(null);
   const [completeFor, setCompleteFor] = useStateD(null);
-  const [screen, setScreen] = useStateD('operacao');  // operacao | dashboards | gestao
-  const [section, setSection] = useStateD('geral');     // sub-secção dentro de Operação
+  const [screen, setScreen] = useStateD(allowedTabs[0] || 'operacao');  // operacao | dashboards | gestao
+  const [section, setSection] = useStateD(coordRole === 'gestaoformacao' ? 'agendamentos' : 'geral');
   const [profileOpen, setProfileOpen] = useStateD(false);
   const [notifOpen, setNotifOpen] = useStateD(false);
   const [profileModal, setProfileModal] = useStateD(null); // 'edit' | 'pw' | null
@@ -93,7 +99,7 @@ function Dashboard({ store }) {
     { id: 'contactos', label: 'Pedidos de contacto', icon: 'phone', badge: cContact },
   ];
 
-  const ctx = { store, candidates, setSel, setSchedFor, setCompleteFor, validate, schedOf, setScreen, setSection };
+  const ctx = { store, candidates, setSel, setSchedFor, setCompleteFor, validate, schedOf, setScreen, setSection, readOnly, allowedGestao, coordRole };
   const cp = S.coordProfile || {};
   const cpInit = (cp.name || 'MC').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
   const notifs = [...S.notifs.map((n) => ({ ...n, who: n.who || (S.candidate.name || 'Novo candidato'), live: true })), ...P.SEED_NOTIFS];
@@ -110,9 +116,9 @@ function Dashboard({ store }) {
         </div>
 
         <div className="pedal-topnav">
-          <button className={screen === 'operacao' ? 'on' : ''} onClick={() => setScreen('operacao')}><Icon name="route" size={15} />Operação</button>
-          <button className={screen === 'dashboards' ? 'on' : ''} onClick={() => setScreen('dashboards')}><Icon name="sparkle" size={15} />Dashboards</button>
-          <button className={screen === 'gestao' ? 'on' : ''} onClick={() => setScreen('gestao')}><Icon name="shield" size={15} />Gestão</button>
+          {allowedTabs.includes('operacao') && <button className={screen === 'operacao' ? 'on' : ''} onClick={() => setScreen('operacao')}><Icon name="route" size={15} />Operação</button>}
+          {allowedTabs.includes('dashboards') && <button className={screen === 'dashboards' ? 'on' : ''} onClick={() => setScreen('dashboards')}><Icon name="sparkle" size={15} />Dashboards</button>}
+          {allowedTabs.includes('gestao') && <button className={screen === 'gestao' ? 'on' : ''} onClick={() => setScreen('gestao')}><Icon name="shield" size={15} />Gestão</button>}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
@@ -133,7 +139,7 @@ function Dashboard({ store }) {
       {screen === 'operacao' && (
         <>
           <div className="pedal-coordnav">
-            {section !== 'geral' && (
+            {section !== 'geral' && coordRole !== 'gestaoformacao' && (
               <button className="pedal-coordtab pedal-backtab" onClick={() => setSection('geral')}>
                 <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}><Icon name="arrow" size={15} /></span>Visão geral
               </button>
@@ -439,7 +445,7 @@ function ValidationList({ ctx }) {
 
 // ── Lista de espera com filtros (região, período, dia da semana) ────
 function WaitingList({ ctx }) {
-  const { candidates, setSel, store } = ctx;
+  const { candidates, setSel, store, readOnly } = ctx;
   const P = window.PEDAL;
   const [reg, setReg] = useStateD('todas');
   const [per, setPer] = useStateD([]);
@@ -508,13 +514,13 @@ function WaitingList({ ctx }) {
                     {weekdays && <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>{weekdays}</div>}
                   </div>
                 </button>
-                <button className="pedal-taskbtn" onClick={() => {
+                {!readOnly && <button className="pedal-taskbtn" onClick={() => {
                   if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
                   else { store.setOverride(c.id, 'validacao'); }
                   store.patchRealCandidate(c.id, { stage: 'validacao' });
                   store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
                   setSel(null);
-                }}>Retomar</button>
+                }}>Retomar</button>}
               </div>
             );
           })}
@@ -1116,6 +1122,7 @@ function CandidateDetail({ c, store, onClose }) {
   const [showChat, setShowChat] = useStateD(false);
   const [rejecting, setRejecting] = useStateD(false);
   const [reason, setReason] = useStateD('');
+  const readOnly = (store.coordRole || 'coordenacao') === 'apoio';
   const isLiveC = c.live || c.id === store.S.candidateId;
   const curIdx = P.stageIndex(c.stage);
   const iv = c.interview || {};
@@ -1222,7 +1229,7 @@ function CandidateDetail({ c, store, onClose }) {
           </div>
         )}
 
-        {c.stage === 'validacao' && !rejecting && (
+        {!readOnly && c.stage === 'validacao' && !rejecting && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 18 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setRejecting(true)}>Rejeitar</button>
@@ -1248,7 +1255,7 @@ function CandidateDetail({ c, store, onClose }) {
           </div>
         )}
 
-        {rejecting && (
+        {!readOnly && rejecting && (
           <div style={{ marginTop: 16 }}>
             <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 8 }}>Motivo da rejeição (opcional)</div>
             <textarea className="pedal-input" style={{ height: 70, paddingTop: 10, resize: 'none' }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex.: sem disponibilidade compatível, fora da área de operação…" />
@@ -1274,9 +1281,8 @@ function DetailItem({ label, value }) {
 
 // ── Ecrã Gestão: menu lateral + conteúdo central ───────────────────
 function GestaoScreen({ ctx }) {
-  const { store, candidates } = ctx;
-  const [g, setG] = useStateD('users');
-  const items = [
+  const { store, candidates, allowedGestao } = ctx;
+  const allItems = [
     { id: 'users', label: 'Utilizadores de gestão', icon: 'people' },
     { id: 'formadores', label: 'Pilotos formadores', icon: 'shield' },
     { id: 'necessidades', label: 'Necessidades / vagas', icon: 'route' },
@@ -1284,6 +1290,8 @@ function GestaoScreen({ ctx }) {
     { id: 'locais', label: 'Locais de encontro', icon: 'pin' },
     { id: 'export', label: 'Exportar base de dados', icon: 'doc' },
   ];
+  const items = allowedGestao ? allItems.filter((it) => allowedGestao.includes(it.id)) : allItems;
+  const [g, setG] = useStateD(items[0] ? items[0].id : 'users');
   return (
     <div className="pedal-gestao">
       <div className="pedal-gestaonav">

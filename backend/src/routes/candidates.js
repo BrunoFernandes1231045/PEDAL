@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../db/supabase');
-const { requireAuth, requireCoordinator } = require('../middleware/auth');
+const { requireAuth, requireCoordinator, requireRole } = require('../middleware/auth');
 
 function genPassword() {
   const words = ['pedal', 'bici', 'porto', 'piloto', 'rota'];
@@ -81,7 +81,7 @@ router.patch('/:id/formalize', requireAuth, async (req, res) => {
   res.json(data);
 });
 
-// PATCH /api/candidates/:id — próprio ou coordinator
+// PATCH /api/candidates/:id — próprio ou coordinator (alteração de stage só para coordenacao)
 router.patch('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   if (req.user.role !== 'coordinator') {
@@ -89,6 +89,9 @@ router.patch('/:id', requireAuth, async (req, res) => {
     if (!own || own.user_id !== req.user.id) return res.status(403).json({ error: 'Proibido' });
   }
   const body = { ...req.body };
+  if (body.stage && req.user.role === 'coordinator' && req.user.coord_role !== 'coordenacao') {
+    return res.status(403).json({ error: 'Apenas coordenação pode alterar o estado de candidatos' });
+  }
   if (body.availability && Array.isArray(body.availability)) {
     body.periods = [...new Set(body.availability.map((a) => a.period))];
   }
