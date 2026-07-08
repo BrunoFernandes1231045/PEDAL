@@ -91,69 +91,144 @@ function ProfileForm({ onSubmit }) {
   );
 }
 
-// Grelha de disponibilidade dia × período (edit + read-only)
-function AvailabilityGrid({ value, onChange, readOnly }) {
-  const P = window.PEDAL;
-  const isOn = (day, period) => (value || []).some((a) => a.day === day && a.period === period);
-  function toggle(day, period) {
-    if (readOnly) return;
-    const next = isOn(day, period)
-      ? (value || []).filter((a) => !(a.day === day && a.period === period))
-      : [...(value || []), { day, period }];
-    onChange(next);
-  }
-  return (
-    <div className="pedal-avail-grid">
-      <div className="pedal-avail-header">
-        <div />
-        {P.PERIODS.map((p) => (
-          <div key={p.id} className="pedal-avail-col-head">{p.name}</div>
-        ))}
-      </div>
-      {P.WEEKDAYS.map((d) => (
-        <div key={d.id} className="pedal-avail-row">
-          <div className="pedal-avail-day">{d.name}</div>
-          {P.PERIODS.map((p) => (
-            <button key={p.id} type="button"
-              className={'pedal-avail-cell' + (isOn(d.id, p.id) ? ' on' : '') + (readOnly ? ' readonly' : '')}
-              onClick={() => toggle(d.id, p.id)} />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // Triagem: localidade(s) + disponibilidade por dia×período (RF-07)
+// locAvail: { [locId]: { [dayId]: periodId | null } }
 function TriageForm({ localities, onSubmit }) {
-  const [locs, setLocs] = useState(['matosinhos']);
-  const [availability, setAvailability] = useState([]);
-  const toggleLoc = (id) => setLocs((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
-  const valid = locs.length > 0 && availability.length > 0;
-  function handleSubmit() {
-    const periods = [...new Set(availability.map((a) => a.period))];
-    onSubmit({ localities: locs, locality: locs[0], availability, periods });
-  }
+  const P = window.PEDAL;
+  const [locAvail, setLocAvail] = useState({});
+  const [openLoc, setOpenLoc] = useState(null);
+
+  const getAvail = (locId) => locAvail[locId] || {};
+  const selectedDays = (locId) => Object.keys(getAvail(locId));
+  const hasAnyPeriod = (locId) => Object.values(getAvail(locId)).some((p) => p != null);
+  const isSelected = (locId) => hasAnyPeriod(locId);
+
+  const toggleDay = (locId, dayId) => {
+    setLocAvail((prev) => {
+      const cur = { ...(prev[locId] || {}) };
+      if (dayId in cur) { delete cur[dayId]; } else { cur[dayId] = null; }
+      return { ...prev, [locId]: cur };
+    });
+  };
+
+  const setPeriod = (locId, dayId, periodId) => {
+    setLocAvail((prev) => ({
+      ...prev,
+      [locId]: { ...(prev[locId] || {}), [dayId]: prev[locId]?.[dayId] === periodId ? null : periodId },
+    }));
+  };
+
+  const clearLoc = (locId) => setLocAvail((prev) => { const n = { ...prev }; delete n[locId]; return n; });
+
+  const handleLocClick = (locId) => {
+    if (openLoc === locId) {
+      if (hasAnyPeriod(locId)) return; // só fecha se não há preferências
+      setOpenLoc(null);
+    } else {
+      setOpenLoc(locId);
+    }
+  };
+
+  const summary = (locId) => {
+    const avail = getAvail(locId);
+    return Object.entries(avail)
+      .filter(([, p]) => p != null)
+      .map(([dId, pId]) => {
+        const d = P.WEEKDAYS.find((w) => w.id === dId);
+        const p = P.PERIODS.find((x) => x.id === pId);
+        return `${d?.name} · ${p?.name}`;
+      }).join('  ·  ');
+  };
+
+  const valid = localities.some((l) => hasAnyPeriod(l.id));
+
+  const handleSubmit = () => {
+    const selLocs = localities.filter((l) => hasAnyPeriod(l.id)).map((l) => l.id);
+    const availability = [];
+    const periodsSet = new Set();
+    selLocs.forEach((locId) => {
+      Object.entries(getAvail(locId)).forEach(([dayId, periodId]) => {
+        if (periodId) { availability.push({ day: dayId, period: periodId, localityId: locId }); periodsSet.add(periodId); }
+      });
+    });
+    onSubmit({ localities: selLocs, locality: selLocs[0], availability, periods: [...periodsSet] });
+  };
+
+  const btnBase = { padding: '6px 11px', borderRadius: 8, cursor: 'pointer', font: '600 12px var(--ui)', transition: 'all .12s' };
+
   return (
     <div className="pedal-card">
-      <Field label="Onde gostarias de pedalar? (podes escolher vários)">
-        <div className="pedal-pickgrid">
-          {localities.map((l) => (
-            <button key={l.id} onClick={() => toggleLoc(l.id)}
-              className={'pedal-pick' + (locs.includes(l.id) ? ' on' : '')}>
-              {l.name}
-            </button>
-          ))}
+      <Field label="Onde e quando podes pedalar?">
+        <div style={{ display: 'grid', gap: 6 }}>
+          {localities.map((loc) => {
+            const open = openLoc === loc.id;
+            const selected = isSelected(loc.id);
+            const days = selectedDays(loc.id);
+            const sum = !open ? summary(loc.id) : null;
+            const canClose = !hasAnyPeriod(loc.id);
+            return (
+              <div key={loc.id}>
+                <button onClick={() => handleLocClick(loc.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: open ? '10px 10px 0 0' : 10, border: `1.5px solid ${selected || open ? 'var(--primary)' : 'var(--line)'}`, background: 'var(--surface)', cursor: 'pointer', transition: 'all .15s' }}>
+                  <span style={{ font: '700 13.5px var(--ui)', color: selected || open ? 'var(--primary)' : 'var(--ink)' }}>{loc.name}</span>
+                  <span style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>{open ? '▲' : '▼'}</span>
+                </button>
+
+                {!open && sum && (
+                  <div style={{ padding: '5px 14px 6px', borderRadius: '0 0 8px 8px', border: '1.5px solid var(--primary)', borderTop: 'none', background: 'var(--primary-soft)', font: '500 11px var(--ui)', color: 'var(--primary-deep)' }}>{sum}</div>
+                )}
+
+                {open && (
+                  <div style={{ border: '1.5px solid var(--primary)', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '12px 14px 14px', background: 'var(--surface)' }}>
+                    <div style={{ font: '600 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 8 }}>Dias disponíveis</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: days.length ? 14 : 0 }}>
+                      {P.WEEKDAYS.map((day) => {
+                        const on = days.includes(day.id);
+                        return (
+                          <button key={day.id} onClick={() => toggleDay(loc.id, day.id)} style={{ ...btnBase, border: `1.5px solid ${on ? 'var(--primary)' : 'var(--line)'}`, background: on ? 'var(--primary-soft)' : 'var(--surface)', color: on ? 'var(--primary-deep)' : 'var(--ink)' }}>{day.name}</button>
+                        );
+                      })}
+                    </div>
+
+                    {days.length > 0 && (
+                      <div>
+                        <div style={{ font: '600 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 8 }}>Preferência por dia</div>
+                        <div style={{ display: 'grid', gap: 7 }}>
+                          {days.map((dayId) => {
+                            const day = P.WEEKDAYS.find((d) => d.id === dayId);
+                            const selP = getAvail(loc.id)[dayId];
+                            return (
+                              <div key={dayId} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ font: '700 12px var(--ui)', color: 'var(--ink)', width: 30, flexShrink: 0 }}>{day?.name}</span>
+                                {P.PERIODS.map((period) => {
+                                  const on = selP === period.id;
+                                  return (
+                                    <button key={period.id} onClick={() => setPeriod(loc.id, dayId, period.id)} style={{ ...btnBase, border: `1.5px solid ${on ? 'var(--primary)' : 'var(--line)'}`, background: on ? 'var(--primary)' : 'var(--surface)', color: on ? '#fff' : 'var(--ink)' }}>{period.name}</button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                      {days.length > 0 ? (
+                        <button onClick={() => clearLoc(loc.id)} style={{ font: '600 11.5px var(--ui)', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Limpar</button>
+                      ) : <span />}
+                      {!canClose && (
+                        <span style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>Limpa as preferências para fechar</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </Field>
-      <Field label="Qual é a tua disponibilidade? (seleciona os dias e horários)">
-        <AvailabilityGrid value={availability} onChange={setAvailability} />
-      </Field>
-      <button className="pedal-btn primary" disabled={!valid}
-        onClick={handleSubmit}
-        style={{ opacity: valid ? 1 : 0.45, width: '100%', marginTop: 8 }}>
-        Ver disponibilidade
-      </button>
+
+      <button className="pedal-btn primary" disabled={!valid} onClick={handleSubmit} style={{ opacity: valid ? 1 : 0.45, width: '100%', marginTop: 8 }}>Ver disponibilidade</button>
     </div>
   );
 }

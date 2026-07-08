@@ -17,11 +17,13 @@ router.post('/', async (req, res) => {
 
   const initialPassword = providedPassword || genPassword();
 
+  const emailVerification = process.env.EMAIL_VERIFICATION === 'true';
+
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
     password: initialPassword,
     user_metadata: { role: 'candidate' },
-    email_confirm: true,
+    email_confirm: !emailVerification,
   });
   if (authError) { console.error('[candidates] auth error:', authError.message); return res.status(500).json({ error: authError.message }); }
 
@@ -32,7 +34,7 @@ router.post('/', async (req, res) => {
     .single();
 
   if (error) { console.error('[candidates] insert error:', error.message, error.details); return res.status(500).json({ error: error.message }); }
-  res.status(201).json({ ...data, initialPassword });
+  res.status(201).json({ ...data, initialPassword, emailVerificationRequired: emailVerification });
 });
 
 // GET /api/candidates — coordinator only
@@ -89,8 +91,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
     if (!own || own.user_id !== req.user.id) return res.status(403).json({ error: 'Proibido' });
   }
   const body = { ...req.body };
-  if (body.stage && req.user.role === 'coordinator' && req.user.coord_role !== 'coordenacao') {
-    return res.status(403).json({ error: 'Apenas coordenação pode alterar o estado de candidatos' });
+  if (body.stage && req.user.role === 'coordinator' && !['administracao', 'coordenacao'].includes(req.user.coord_role)) {
+    return res.status(403).json({ error: 'Sem permissão para alterar o estado de candidatos' });
   }
   if (body.availability && Array.isArray(body.availability)) {
     body.periods = [...new Set(body.availability.map((a) => a.period))];

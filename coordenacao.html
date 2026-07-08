@@ -257,6 +257,17 @@ input{font-family:inherit;}
 </head>
 <body>
 <div id="root"></div>
+<script>
+(function(){
+  var _f = window.fetch;
+  window.fetch = function(url, opts) {
+    if (typeof url === 'string' && window.location.hostname !== 'localhost') {
+      url = url.replace('http://localhost:3001', '');
+    }
+    return _f.call(this, url, opts);
+  };
+})();
+</script>
 
 <!-- Define modo coordenação antes de carregar os scripts -->
 <script>window.__PEDAL_MODE = 'coord';</script>

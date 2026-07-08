@@ -4,23 +4,25 @@ const supabase = require('../db/supabase');
 const { requireAuth, requireCoordinator } = require('../middleware/auth');
 
 router.get('/', requireAuth, requireCoordinator, async (req, res) => {
-  const { data, error } = await supabase.from('stations').select('*');
+  const { data, error } = await supabase
+    .from('stations').select('id, name, locality, address, note').order('name');
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });
 
 router.post('/', requireAuth, requireCoordinator, async (req, res) => {
-  const { name, address, locality_id } = req.body;
+  const { name, locality, address, note } = req.body;
   if (!name) return res.status(400).json({ error: 'name é obrigatório' });
   const { data, error } = await supabase
-    .from('stations').insert({ name, address, locality_id }).select().single();
+    .from('stations').insert({ name, locality: locality || null, address: address || null, note: note || null }).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json(data);
 });
 
 router.patch('/:id', requireAuth, requireCoordinator, async (req, res) => {
+  const { name, locality, address, note } = req.body;
   const { data, error } = await supabase
-    .from('stations').update(req.body).eq('id', req.params.id).select().single();
+    .from('stations').update({ name, locality, address, note }).eq('id', req.params.id).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
 });

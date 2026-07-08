@@ -8,7 +8,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
   const P = window.PEDAL;
   const sc = store.S.scheduling[c.id] || {};
   const slot = sc.chosen != null && sc.slots ? sc.slots[sc.chosen] : null;
-  const trainer = sc.trainerId ? (store.S.trainers || []).find((t) => t.id === sc.trainerId) : null;
+  const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
   const [mode, setMode] = useStateCF(null); // 'confirm' | 'reject'
   const [comment, setComment] = useStateCF('');
 

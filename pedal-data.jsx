@@ -226,8 +226,8 @@ PEDAL.SEED_STATIONS = [
 
 // Utilizadores da consola de gestão (Fase 4)
 PEDAL.SEED_MGMT_USERS = [
-  { id: 'u1', name: 'Maria Coelho', email: 'maria.coelho@pedalarsemidade.pt', phone: '936 100 200', role: 'Coordenação', createdAt: '2025-09-01' },
-  { id: 'u2', name: 'Nuno Almeida', email: 'nuno.almeida@pedalarsemidade.pt', phone: '936 300 400', role: 'Gestão de formação', createdAt: '2026-01-15' },
+  { id: 'u1', name: 'Administração', email: 'administração@pedal.pt', phone: '', role: 'Administração', createdAt: '2026-07-08' },
+  { id: 'u2', name: 'Coordenador', email: 'coordenador@pedal.pt', phone: '', role: 'Coordenação', createdAt: '2026-07-08' },
 ];
 
 // ── Fase 3 ───────────────────────────────────────────────────────────

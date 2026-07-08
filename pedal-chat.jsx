@@ -25,7 +25,9 @@ function ChatView({ store, tone = 'caloroso' }) {
   const triageResultRef = useRefC(null); // fresh match result from triage submit (avoids stale S.candidate)
 
   const { addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up } = store;
-  const locOf = (id) => P.LOCALITIES.find((l) => l.id === id) || P.LOCALITIES[0];
+  // Localidades: vêm da BD (realLocalities), com fallback para P.LOCALITIES enquanto carrega
+  const allLocalities = store.realLocalities || P.LOCALITIES;
+  const locOf = (id) => allLocalities.find((l) => l.id === id) || allLocalities[0];
   const INTERVIEW = P.INTERVIEW;
 
   // ── fila de mensagens do agente com indicador "a escrever" ──
@@ -62,14 +64,23 @@ function ChatView({ store, tone = 'caloroso' }) {
         const open = r.open || [];
         const closed = r.closed || [];
         const names = (arr) => arr.map((l) => l.name).join(', ');
+        if (open.length && closed.length) {
+          // Caso misto: algumas zonas com vaga, outras sem
+          const openLabel = open.length === 1 ? names(open) : `${names(open)}`;
+          return [
+            { text: `Há procura de pilotos em ${names(open)} compatível com a tua disponibilidade! 🎉` },
+            { text: `Em ${names(closed)} não há vaga compatível neste momento. 🙏 Ficam em lista de espera — avisamos-te se abrir vaga.` },
+            { text: `Queres avançar com ${openLabel}, ou preferes escolher outras zonas?` },
+          ];
+        }
         if (open.length) {
-          const lines = [{ text: `Boa notícia! 🎉 Há procura de pilotos em ${names(open)} compatível com a tua disponibilidade.` }];
-          if (closed.length) lines.push({ text: `Em ${names(closed)} não há vaga compatível agora — guardo-te em lista de espera para essa(s) zona(s) e aviso-te quando abrir. 💛` });
-          lines.push({ text: 'Recordo só que contamos com cerca de 2 horas por semana da tua parte. Se isso te servir, avançamos já para uma breve entrevista — demora cerca de 2 minutos.' });
-          return lines;
+          return [
+            { text: `Boa notícia! 🎉 Há procura de pilotos em ${names(open)} compatível com a tua disponibilidade.` },
+            { text: 'Contamos com cerca de 2 horas por semana da tua parte. Se isso te servir, avançamos já para uma breve entrevista — demora cerca de 2 minutos.' },
+          ];
         }
         return [
-          { text: `Neste momento não há vaga compatível em ${names([...open, ...closed])} com a tua disponibilidade. 🙏` },
+          { text: `Neste momento não há vaga compatível em ${names(closed)} com a tua disponibilidade. 🙏` },
           { text: 'Ficaste automaticamente em lista de espera — avisamos-te assim que surgir uma necessidade compatível na tua zona. 💛' },
         ];
       }
@@ -115,7 +126,16 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'collect': return { type: 'form_profile' };
       case 'triage': return { type: 'triage' };
       case 'triage_result': {
-        const anyOpen = (triageResultRef.current && triageResultRef.current.open && triageResultRef.current.open.length > 0);
+        const r = triageResultRef.current || {};
+        const anyOpen = (r.open && r.open.length > 0);
+        const anyClosed = (r.closed && r.closed.length > 0);
+        if (anyOpen && anyClosed) {
+          const openLabel = r.open.length === 1 ? r.open[0].name : 'as zonas disponíveis';
+          return { type: 'quick', options: [
+            { label: `Continuar com ${openLabel} →`, go: 'interview', accent: 'fill' },
+            { label: 'Escolher outras zonas', go: 'triage' },
+          ]};
+        }
         return anyOpen
           ? { type: 'quick', options: [{ label: 'Começar entrevista →', go: 'interview', accent: 'fill' }, { label: 'Tenho uma dúvida', action: 'askPedal' }] }
           : { type: 'quick', options: [{ label: 'Escolher outras zonas', go: 'triage' }] };
@@ -490,14 +510,14 @@ function ChatView({ store, tone = 'caloroso' }) {
       addMessage({ from: 'agent', id: uidC(), card: 'credentials' });
       enterNode('triage');
     }} />;
-    if (it.type === 'triage') return <TriageForm localities={P.LOCALITIES} onSubmit={(d) => {
+    if (it.type === 'triage') return <TriageForm localities={allLocalities} onSubmit={(d) => {
       patchCandidate({ localities: d.localities, locality: d.locality, periods: d.periods, availability: d.availability });
       setStage('triagem');
       // Compute match NOW with fresh d.periods — S.candidate is still stale (async React update)
       const locIds = d.localities && d.localities.length ? d.localities : [d.locality];
       const sel = locIds.map((id) => locOf(id));
-      const open = sel.filter((l) => P.needMatch(S.needs, l.name, d.periods));
-      const closed = sel.filter((l) => !P.needMatch(S.needs, l.name, d.periods));
+      const open = sel.filter((l) => P.needMatch(store.realNeeds || [], l.name, d.periods));
+      const closed = sel.filter((l) => !P.needMatch(store.realNeeds || [], l.name, d.periods));
       triageResultRef.current = { open, closed };
       const selNames = locIds.map((id) => locOf(id).name).join(', ');
       const availText = d.availability.map((a) => {
@@ -517,8 +537,8 @@ function ChatView({ store, tone = 'caloroso' }) {
     if (it.type === 'interviewText') return <InterviewText q={it.q} onSubmit={(v) => answerInterview(it.q.id, v)} />;
     if (it.type === 'schedule') {
       const slots = (liveSched && liveSched.slots) || [];
-      const trainer = (liveSched && liveSched.trainerId) ? (store.S.trainers || []).find((t) => t.id === liveSched.trainerId) : null;
-      const station = (liveSched && liveSched.stationId) ? (store.S.stations || []).find((s) => s.id === liveSched.stationId) : null;
+      const trainer = (liveSched && liveSched.trainerId) ? (store.realTrainers || []).find((t) => t.id === liveSched.trainerId) : null;
+      const station = (liveSched && liveSched.stationId) ? (store.realStations || []).find((s) => s.id === liveSched.stationId) : null;
       return <SchedulePicker slots={slots} station={station} onRequestNew={() => requestReschedule(false)} onPick={(idx) => {
         const s = slots[idx]; const label = `${P.fmtDate(s.date)} às ${s.time}`;
         addMessage({ from: 'user', text: label });

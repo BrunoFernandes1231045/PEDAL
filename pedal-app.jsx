@@ -19,6 +19,7 @@ const INITIAL = {
   contactRequests: (window.PEDAL && window.PEDAL.SEED_CONTACTS || []).map((c) => ({ ...c })),
   candidateId: null,        // ID do candidato no backend (Supabase)
   account: null,            // { email, password, createdAt } — criada após a inscrição
+  emailVerificationRequired: false, // true quando EMAIL_VERIFICATION=true no backend
   session: { authed: false },// sessão ativa no agente (login)
   signature: null,          // dataURL da rubrica do piloto (formalização)
   termsAccepted: false,     // termos de compromisso aceites
@@ -52,8 +53,13 @@ function App() {
   const [resetKey, setResetKey] = useStateA(0);
   const [scale, setScale] = useStateA(1);
   const [coordJwt, setCoordJwtRaw] = useStateA(null); // não persiste no localStorage
-  const [coordRole, setCoordRoleRaw] = useStateA(null); // 'coordenacao' | 'gestaoformacao' | 'administracao' | 'apoio'
+  const [coordRole, setCoordRoleRaw] = useStateA(null);
+  const [coordProfile, setCoordProfileRaw] = useStateA(null); // não persiste no localStorage — isolado por tab
   const [realCandidates, setRealCandidates] = useStateA(null);
+  const [realTrainers, setRealTrainers] = useStateA(null);
+  const [realNeeds, setRealNeeds] = useStateA(null);
+  const [realStations, setRealStations] = useStateA(null);
+  const [realLocalities, setRealLocalities] = useStateA(null);
   const [candidateJwt, setCandidateJwtRaw] = useStateA(null);
   const msgSyncTimer = useRefA();
 
@@ -111,7 +117,8 @@ function App() {
         .then((r) => r.json())
         .then(async (data) => {
           if (!data.id) return;
-          setS((p) => ({ ...p, candidateId: data.id }));
+          setS((p) => ({ ...p, candidateId: data.id, emailVerificationRequired: !!data.emailVerificationRequired }));
+          if (data.emailVerificationRequired) return; // não auto-login — espera verificação de email
           try {
             const authRes = await fetch('https://mamvckyoqrjhivffimob.supabase.co/auth/v1/token?grant_type=password', {
               method: 'POST',
@@ -147,8 +154,23 @@ function App() {
   const goTab = (tab) => setS((p) => ({ ...p, tab }));
   const setScheduling = (id, data) => setS((p) => ({ ...p, scheduling: { ...p.scheduling, [id]: { ...(p.scheduling[id] || { slots: [], chosen: null }), ...data } } }));
   const setOverride = (id, stage) => setS((p) => ({ ...p, overrides: { ...p.overrides, [id]: stage } }));
-  const addTrainer = (t) => setS((p) => ({ ...p, trainers: [...p.trainers, { id: 't' + Math.random().toString(36).slice(2, 8), ...t }] }));
-  const removeTrainer = (id) => setS((p) => ({ ...p, trainers: p.trainers.filter((t) => t.id !== id) }));
+  const addTrainer = (t) => {
+    if (!coordJwt) return;
+    fetch('http://localhost:3001/api/trainers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify(t),
+    }).then((r) => r.json()).then((created) => {
+      if (created && created.id) setRealTrainers((prev) => [...(prev || []), created]);
+    }).catch(() => {});
+  };
+  const removeTrainer = (id) => {
+    if (!coordJwt) return;
+    fetch(`http://localhost:3001/api/trainers/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${coordJwt}` },
+    }).then((r) => { if (r.ok) setRealTrainers((prev) => (prev || []).filter((t) => t.id !== id)); }).catch(() => {});
+  };
   const addContactRequest = (r) => setS((p) => ({ ...p, contactRequests: [{ id: 'cr' + Math.random().toString(36).slice(2, 8), ago: 'agora mesmo', status: 'novo', ...r }, ...p.contactRequests] }));
   const resolveContact = (id) => setS((p) => ({ ...p, contactRequests: p.contactRequests.map((c) => (c.id === id ? { ...c, status: 'resolvido' } : c)) }));
   const addModuleMessage = (moduleId, message) => setS((p) => ({ ...p, moduleConversations: { ...p.moduleConversations, [moduleId]: [...(p.moduleConversations[moduleId] || []), { ts: Date.now(), ...message }] } }));
@@ -186,8 +208,50 @@ function App() {
   const setModuleContent = (id, patch) => setS((p) => ({ ...p, moduleContent: { ...p.moduleContent, [id]: { ...(p.moduleContent[id] || {}), ...patch } } }));
   const setCoordJwt = (jwt) => setCoordJwtRaw(jwt);
   const setCoordRole = (role) => setCoordRoleRaw(role);
-  const clearCoordJwt = () => { setCoordJwtRaw(null); setCoordRoleRaw(null); setRealCandidates(null); };
+  const clearCoordJwt = () => { setCoordJwtRaw(null); setCoordRoleRaw(null); setRealCandidates(null); setRealTrainers(null); setRealStations(null); setCoordProfileRaw(null); };
   const patchRealCandidate = (id, patch) => setRealCandidates((prev) => prev ? prev.map((c) => c.id === id ? { ...c, ...patch } : c) : prev);
+
+  // Localidades e necessidades: endpoints públicos, carregados na montagem
+  useEffectA(() => {
+    fetch('http://localhost:3001/api/localities')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setRealLocalities(data); })
+      .catch(() => {});
+  }, []);
+
+  useEffectA(() => {
+    fetch('http://localhost:3001/api/needs')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setRealNeeds(data); })
+      .catch(() => {});
+  }, []);
+
+  // Refetch needs quando o candidato chega ao formulário de triagem — garante dados frescos
+  // mesmo que a coordenação tenha definido vagas depois de a página ter carregado
+  useEffectA(() => {
+    if (S.chat && S.chat.node === 'triage') {
+      fetch('http://localhost:3001/api/needs')
+        .then((r) => r.json())
+        .then((data) => { if (Array.isArray(data)) setRealNeeds(data); })
+        .catch(() => {});
+    }
+  }, [S.chat && S.chat.node]);
+
+  useEffectA(() => {
+    if (!coordJwt) { setRealTrainers(null); return; }
+    fetch('http://localhost:3001/api/trainers', { headers: { 'Authorization': `Bearer ${coordJwt}` } })
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setRealTrainers(data); })
+      .catch(() => {});
+  }, [coordJwt]);
+
+  useEffectA(() => {
+    if (!coordJwt) { setRealStations(null); return; }
+    fetch('http://localhost:3001/api/stations', { headers: { 'Authorization': `Bearer ${coordJwt}` } })
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setRealStations(data); })
+      .catch(() => {});
+  }, [coordJwt]);
 
   useEffectA(() => {
     if (!coordJwt) { setRealCandidates(null); return; }
@@ -231,23 +295,97 @@ function App() {
     }
   }, [S.stage, candidateJwt]);
 
-  // — Fase 4: locais de encontro, utilizadores de gestão e perfil da coordenação —
-  const addStation = (st) => setS((p) => ({ ...p, stations: [...(p.stations || []), { id: 'st' + Math.random().toString(36).slice(2, 8), ...st }] }));
-  const updateStation = (id, patch) => setS((p) => ({ ...p, stations: (p.stations || []).map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
-  const removeStation = (id) => setS((p) => ({ ...p, stations: (p.stations || []).filter((s) => s.id !== id) }));
+  // — Fase 4: locais de encontro (API), utilizadores de gestão e perfil da coordenação —
+  const addStation = (st) => {
+    if (!coordJwt) return;
+    fetch('http://localhost:3001/api/stations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify(st),
+    }).then((r) => r.json()).then((created) => {
+      if (created && created.id) setRealStations((prev) => [...(prev || []), created]);
+    }).catch(() => {});
+  };
+  const updateStation = (id, patch) => {
+    if (!coordJwt) return;
+    fetch(`http://localhost:3001/api/stations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify(patch),
+    }).then((r) => r.json()).then((updated) => {
+      if (updated && updated.id) setRealStations((prev) => (prev || []).map((s) => s.id === id ? updated : s));
+    }).catch(() => {});
+  };
+  const removeStation = (id) => {
+    if (!coordJwt) return;
+    fetch(`http://localhost:3001/api/stations/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${coordJwt}` },
+    }).then((r) => { if (r.ok) setRealStations((prev) => (prev || []).filter((s) => s.id !== id)); }).catch(() => {});
+  };
   const addMgmtUser = (u) => setS((p) => ({ ...p, mgmtUsers: [...(p.mgmtUsers || []), { id: 'u' + Math.random().toString(36).slice(2, 8), createdAt: new Date().toISOString().slice(0, 10), ...u }] }));
   const removeMgmtUser = (id) => setS((p) => ({ ...p, mgmtUsers: (p.mgmtUsers || []).filter((u) => u.id !== id) }));
-  const setCoordProfile = (patch) => setS((p) => ({ ...p, coordProfile: { ...p.coordProfile, ...patch } }));
-  const addNeed = (n) => setS((p) => ({ ...p, needs: [...(p.needs || []), { id: 'nd' + Math.random().toString(36).slice(2, 8), ...n }] }));
-  const updateNeed = (id, patch) => setS((p) => ({ ...p, needs: (p.needs || []).map((n) => (n.id === id ? { ...n, ...patch } : n)) }));
-  const removeNeed = (id) => setS((p) => ({ ...p, needs: (p.needs || []).filter((n) => n.id !== id) }));
+  const updateMgmtUser = (id, patch) => setS((p) => ({ ...p, mgmtUsers: (p.mgmtUsers || []).map((u) => u.id === id ? { ...u, ...patch } : u) }));
+  const setCoordProfile = (patch) => setCoordProfileRaw((p) => ({ ...(p || {}), ...patch }));
+  const addNeed = (n) => {
+    if (!coordJwt) return;
+    fetch('http://localhost:3001/api/needs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify(n),
+    }).then((r) => r.json()).then((created) => {
+      if (created && created.id) {
+        setRealNeeds((prev) => [...(prev || []), created]);
+        // Refresh localities in case a new locality name was added
+        fetch('http://localhost:3001/api/localities')
+          .then((r) => r.json())
+          .then((data) => { if (Array.isArray(data)) setRealLocalities(data); })
+          .catch(() => {});
+      }
+    }).catch(() => {});
+  };
+  const updateNeed = (id, patch) => {
+    if (!coordJwt) return;
+    fetch(`http://localhost:3001/api/needs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify(patch),
+    }).then((r) => r.json()).then((updated) => {
+      if (updated && updated.id) setRealNeeds((prev) => (prev || []).map((n) => n.id === id ? updated : n));
+    }).catch(() => {});
+  };
+  const removeNeed = (id) => {
+    if (!coordJwt) return;
+    fetch(`http://localhost:3001/api/needs/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${coordJwt}` },
+    }).then((r) => { if (r.ok) setRealNeeds((prev) => (prev || []).filter((n) => n.id !== id)); }).catch(() => {});
+  };
+  const addLocality = (name) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão' });
+    return fetch('http://localhost:3001/api/localities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify({ name }),
+    }).then((r) => r.json().then((d) => {
+      if (r.ok) { setRealLocalities((prev) => [...(prev || []), d].sort((a, b) => a.name.localeCompare(b.name, 'pt'))); return { ok: true }; }
+      return { ok: false, error: d.error || 'Erro ao criar' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
+  const removeLocality = (id) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão' });
+    return fetch(`http://localhost:3001/api/localities/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${coordJwt}` },
+    }).then((r) => {
+      if (r.ok) { setRealLocalities((prev) => (prev || []).filter((l) => l.id !== id)); return { ok: true }; }
+      return r.json().then((d) => ({ ok: false, error: d.error || 'Erro ao eliminar' }));
+    }).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
   const reset = () => {
     // Preservar configuração da coordenação — o reset só reinicia o fluxo do candidato
     const coordData = {
       moduleContent: S.moduleContent || {},
-      trainers: S.trainers && S.trainers.length ? S.trainers : INITIAL.trainers.map((t) => ({ ...t })),
-      stations: S.stations && S.stations.length ? S.stations : INITIAL.stations.map((s) => ({ ...s })),
-      needs: S.needs && S.needs.length ? S.needs : INITIAL.needs.map((n) => ({ ...n })),
       mgmtUsers: S.mgmtUsers && S.mgmtUsers.length ? S.mgmtUsers : INITIAL.mgmtUsers.map((u) => ({ ...u })),
       coordProfile: { ...INITIAL.coordProfile, ...(S.coordProfile || {}) },
       moduleConversations: S.moduleConversations || {},
@@ -257,7 +395,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, patchRealCandidate, realCandidates, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, addLocality, removeLocality, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

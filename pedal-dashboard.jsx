@@ -51,16 +51,16 @@ function AvailabilityGrid({ value, onChange, readOnly }) {
 function Dashboard({ store }) {
   const S = store.S; const P = window.PEDAL;
   const coordRole = store.coordRole || 'coordenacao';
-  const ROLE_TABS = { coordenacao: ['operacao', 'dashboards', 'gestao'], gestaoformacao: ['operacao', 'gestao'], administracao: ['dashboards', 'gestao'], apoio: ['operacao', 'dashboards', 'gestao'] };
-  const ROLE_GESTAO = { coordenacao: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'export'], gestaoformacao: ['formadores'], administracao: ['export'], apoio: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'export'] };
+  const ROLE_TABS = { administracao: ['operacao', 'dashboards', 'gestao'], coordenacao: ['operacao', 'dashboards'] };
+  const ROLE_GESTAO = { administracao: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'localidades', 'export'] };
   const allowedTabs = ROLE_TABS[coordRole] || ROLE_TABS.coordenacao;
-  const allowedGestao = ROLE_GESTAO[coordRole] || ROLE_GESTAO.coordenacao;
-  const readOnly = coordRole === 'apoio';
+  const allowedGestao = ROLE_GESTAO[coordRole] || null;
+  const readOnly = false;
   const [sel, setSel] = useStateD(null);
   const [schedFor, setSchedFor] = useStateD(null);
   const [completeFor, setCompleteFor] = useStateD(null);
   const [screen, setScreen] = useStateD(allowedTabs[0] || 'operacao');  // operacao | dashboards | gestao
-  const [section, setSection] = useStateD(coordRole === 'gestaoformacao' ? 'agendamentos' : 'geral');
+  const [section, setSection] = useStateD('geral');
   const [profileOpen, setProfileOpen] = useStateD(false);
   const [notifOpen, setNotifOpen] = useStateD(false);
   const [profileModal, setProfileModal] = useStateD(null); // 'edit' | 'pw' | null
@@ -100,7 +100,7 @@ function Dashboard({ store }) {
   ];
 
   const ctx = { store, candidates, setSel, setSchedFor, setCompleteFor, validate, schedOf, setScreen, setSection, readOnly, allowedGestao, coordRole };
-  const cp = S.coordProfile || {};
+  const cp = store.coordProfile || {};
   const cpInit = (cp.name || 'MC').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
   const notifs = [...S.notifs.map((n) => ({ ...n, who: n.who || (S.candidate.name || 'Novo candidato'), live: true })), ...P.SEED_NOTIFS];
 
@@ -139,7 +139,7 @@ function Dashboard({ store }) {
       {screen === 'operacao' && (
         <>
           <div className="pedal-coordnav">
-            {section !== 'geral' && coordRole !== 'gestaoformacao' && (
+            {section !== 'geral' && (
               <button className="pedal-coordtab pedal-backtab" onClick={() => setSection('geral')}>
                 <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}><Icon name="arrow" size={15} /></span>Visão geral
               </button>
@@ -174,7 +174,7 @@ function Dashboard({ store }) {
 
 // Menu de perfil do utilizador da consola (logout, password, telefone, email)
 function CoordProfileMenu({ store, onClose, onOpenModal }) {
-  const cp = store.S.coordProfile || {};
+  const cp = store.coordProfile || {};
   return (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 55 }} onClick={onClose} />
@@ -216,7 +216,7 @@ function ProfileSuccess({ title, message, onClose }) {
 
 // Pop-up: editar telefone / email
 function CoordEditModal({ store, onClose }) {
-  const cp = store.S.coordProfile || {};
+  const cp = store.coordProfile || {};
   const [form, setForm] = useStateD({ phone: cp.phone || '', email: cp.email || '' });
   const [done, setDone] = useStateD(false);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
@@ -246,16 +246,42 @@ function CoordEditModal({ store, onClose }) {
 }
 
 // Pop-up: mudar palavra-passe
+const SUPABASE_URL_D = 'https://mamvckyoqrjhivffimob.supabase.co';
+const SUPABASE_ANON_KEY_D = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM';
 function CoordPwModal({ store, onClose }) {
+  const [pwCurrent, setPwCurrent] = useStateD('');
   const [pw, setPw] = useStateD('');
   const [pw2, setPw2] = useStateD('');
   const [err, setErr] = useStateD('');
+  const [loading, setLoading] = useStateD(false);
   const [done, setDone] = useStateD(false);
-  const save = () => {
-    if (pw.length < 4) { setErr('A palavra-passe deve ter pelo menos 4 caracteres.'); return; }
+
+  const save = async () => {
+    if (!pwCurrent) { setErr('Introduz a palavra-passe actual.'); return; }
+    if (pw.length < 4) { setErr('A nova palavra-passe deve ter pelo menos 4 caracteres.'); return; }
     if (pw !== pw2) { setErr('As palavras-passe não coincidem.'); return; }
-    setErr(''); setDone(true);
+    setLoading(true); setErr('');
+    const email = (store.coordProfile || {}).email;
+    try {
+      // Verificar password actual
+      const verifyRes = await fetch(`${SUPABASE_URL_D}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY_D },
+        body: JSON.stringify({ email, password: pwCurrent }),
+      });
+      if (!verifyRes.ok) { setErr('Palavra-passe actual incorrecta.'); return; }
+      // Actualizar para a nova password
+      const updateRes = await fetch(`${SUPABASE_URL_D}/auth/v1/user`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY_D, 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (!updateRes.ok) { const d = await updateRes.json(); setErr(d.message || 'Erro ao alterar palavra-passe.'); return; }
+      setDone(true);
+    } catch (_) { setErr('Erro de ligação ao servidor.'); }
+    finally { setLoading(false); }
   };
+
   return (
     <div className="pedal-modal-wrap" onClick={onClose}>
       <div className="pedal-modal" style={{ width: 380 }} onClick={(e) => e.stopPropagation()}>
@@ -266,13 +292,15 @@ function CoordPwModal({ store, onClose }) {
           <>
             <div style={{ font: '800 18px var(--display)', color: 'var(--ink)', marginBottom: 4 }}>Mudar palavra-passe</div>
             <p style={{ font: '400 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 16px' }}>Escolhe uma nova palavra-passe para a tua conta.</p>
+            <FieldLite label="Palavra-passe actual"><input className="pedal-input" type="password" value={pwCurrent} onChange={(e) => { setPwCurrent(e.target.value); setErr(''); }} placeholder="A tua password actual" autoFocus /></FieldLite>
+            <div style={{ height: 10 }} />
             <FieldLite label="Nova palavra-passe"><input className="pedal-input" type="password" value={pw} onChange={(e) => { setPw(e.target.value); setErr(''); }} placeholder="Mínimo 4 caracteres" /></FieldLite>
             <div style={{ height: 10 }} />
             <FieldLite label="Confirmar palavra-passe"><input className="pedal-input" type="password" value={pw2} onChange={(e) => { setPw2(e.target.value); setErr(''); }} placeholder="Repete a palavra-passe" /></FieldLite>
             {err && <div style={{ font: '600 11.5px var(--ui)', color: 'var(--primary-deep)', marginTop: 8 }}>{err}</div>}
             <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
               <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
-              <button className="pedal-btn primary" style={{ flex: 1 }} onClick={save}>Guardar</button>
+              <button className="pedal-btn primary" style={{ flex: 1 }} disabled={loading} onClick={save}>{loading ? 'A guardar…' : 'Guardar'}</button>
             </div>
           </>
         )}
@@ -450,6 +478,7 @@ function WaitingList({ ctx }) {
   const [reg, setReg] = useStateD('todas');
   const [per, setPer] = useStateD([]);
   const [wd, setWd] = useStateD([]);
+  const [sel, setSel2] = useStateD(new Set());
   const toggle = (arr, set, id) => set(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
   const isLiveCandidate = (c) => c.live || c.id === store.S.candidateId;
 
@@ -458,6 +487,24 @@ function WaitingList({ ctx }) {
   if (per.length) list = list.filter((c) => (c.periods || []).some((p) => per.includes(p)));
   if (wd.length) list = list.filter((c) => (c.weekdays || []).some((d) => wd.includes(d)));
   const regsWith = [...new Set(candidates.filter((c) => c.stage === 'espera').map((c) => c.localityId))];
+
+  const toggleSel = (id) => setSel2((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allChecked = list.length > 0 && list.every((c) => sel.has(c.id));
+  const someChecked = list.some((c) => sel.has(c.id));
+  const toggleAll = () => setSel2(allChecked ? new Set() : new Set(list.map((c) => c.id)));
+
+  const resumeOne = (c) => {
+    if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
+    else { store.setOverride(c.id, 'validacao'); }
+    store.patchRealCandidate(c.id, { stage: 'validacao' });
+    store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
+    setSel(null);
+  };
+
+  const resumeSelected = () => {
+    list.filter((c) => sel.has(c.id)).forEach((c) => resumeOne(c));
+    setSel2(new Set());
+  };
 
   return (
     <div className="pedal-panel">
@@ -489,42 +536,59 @@ function WaitingList({ ctx }) {
             {P.WEEKDAYS.map((d) => <button key={d.id} className={'pedal-pick small' + (wd.includes(d.id) ? ' on' : '')} onClick={() => toggle(wd, setWd, d.id)}>{d.name}</button>)}
           </div>
         </div>
-        {(reg !== 'todas' || per.length || wd.length) ? (
-          <button className="pedal-clearfilter" onClick={() => { setReg('todas'); setPer([]); setWd([]); }}>Limpar filtros</button>
-        ) : null}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
+          {(reg !== 'todas' || per.length || wd.length) ? (
+            <button className="pedal-clearfilter" style={{ margin: 0 }} onClick={() => { setReg('todas'); setPer([]); setWd([]); }}>Limpar filtros</button>
+          ) : <span />}
+          {!readOnly && sel.size > 0 && (
+            <button className="pedal-taskbtn" style={{ borderColor: 'var(--primary)', color: 'var(--primary-deep)' }} onClick={resumeSelected}>
+              Retomar selecionados ({sel.size})
+            </button>
+          )}
+        </div>
       </div>
 
       {list.length === 0 ? (
         <div className="pedal-taskempty" style={{ marginTop: 14 }}><Icon name="clock" size={16} color="var(--ink-soft)" />Ninguém corresponde a estes filtros.</div>
       ) : (
-        <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
-          {list.map((c) => {
-            const weekdays = (c.weekdays || []).map((d) => (P.WEEKDAYS.find((x) => x.id === d) || {}).name).join(' ');
-            const perLabel = (c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') || '—';
-            return (
-              <div key={c.id} className="pedal-listrow" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'default' }}>
-                <button style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', minWidth: 0 }} onClick={() => setSel(c)}>
-                  <div className="pedal-kav">{c.initials}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{c.name}</div>
-                    <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{c.locality} · {perLabel}</div>
-                  </div>
-                  <div style={{ textAlign: 'right', marginRight: 4 }}>
-                    <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>{c.days} dias</div>
-                    {weekdays && <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>{weekdays}</div>}
-                  </div>
-                </button>
-                {!readOnly && <button className="pedal-taskbtn" onClick={() => {
-                  if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
-                  else { store.setOverride(c.id, 'validacao'); }
-                  store.patchRealCandidate(c.id, { stage: 'validacao' });
-                  store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
-                  setSel(null);
-                }}>Retomar</button>}
-              </div>
-            );
-          })}
-        </div>
+        <>
+          {!readOnly && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0 2px', borderBottom: '1px solid var(--line)', marginBottom: 4 }}>
+              <input type="checkbox" checked={allChecked} ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }} onChange={toggleAll}
+                style={{ width: 15, height: 15, accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }} />
+              <span style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)', cursor: 'pointer' }} onClick={toggleAll}>
+                {allChecked ? 'Desseleccionar todos' : 'Seleccionar todos'}
+              </span>
+            </div>
+          )}
+          <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+            {list.map((c) => {
+              const weekdays = (c.weekdays || []).map((d) => (P.WEEKDAYS.find((x) => x.id === d) || {}).name).join(' ');
+              const perLabel = (c.periods || []).map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') || '—';
+              const checked = sel.has(c.id);
+              return (
+                <div key={c.id} className="pedal-listrow" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'default', background: checked ? 'var(--primary-soft)' : undefined, borderRadius: checked ? 8 : undefined, transition: 'background .15s' }}>
+                  {!readOnly && (
+                    <input type="checkbox" checked={checked} onChange={() => toggleSel(c.id)}
+                      style={{ width: 15, height: 15, accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }} />
+                  )}
+                  <button style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', minWidth: 0 }} onClick={() => setSel(c)}>
+                    <div className="pedal-kav">{c.initials}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{c.name}</div>
+                      <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{c.locality} · {perLabel}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', marginRight: 4 }}>
+                      <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>{c.days} dias</div>
+                      {weekdays && <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>{weekdays}</div>}
+                    </div>
+                  </button>
+                  {!readOnly && sel.size === 0 && <button className="pedal-taskbtn" onClick={() => resumeOne(c)}>Retomar</button>}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
@@ -534,8 +598,8 @@ function WaitingList({ ctx }) {
 function AgendamentosSection({ ctx }) {
   const { candidates, setSel, setSchedFor, setCompleteFor, schedOf, store } = ctx;
   const P = window.PEDAL;
-  const trainerOf = (id) => (store.S.trainers || []).find((t) => t.id === id) || null;
-  const stationOf = (id) => (store.S.stations || []).find((s) => s.id === id) || null;
+  const trainerOf = (id) => (store.realTrainers || []).find((t) => t.id === id) || null;
+  const stationOf = (id) => (store.realStations || []).find((s) => s.id === id) || null;
   const list = candidates.filter((c) => c.stage === 'pratica');
   const toAgendar = list.filter((c) => { const sc = schedOf(c); return !sc || sc.chosen == null; });
   const agendados = list.filter((c) => { const sc = schedOf(c); return sc && sc.chosen != null; });
@@ -775,7 +839,7 @@ function exportCandidates(rows, store, fileId) {
   rows.forEach((c) => {
     const sc = store.S.scheduling[c.id] || null;
     const ag = sc && sc.chosen != null && sc.slots && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
-    const trainer = sc && sc.trainerId ? ((store.S.trainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
+    const trainer = sc && sc.trainerId ? ((store.realTrainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
     // disponibilidade: usa availability (dia+período) se disponível, senão periods
     const avail = Array.isArray(c.availability) && c.availability.length
       ? c.availability.map((a) => {
@@ -838,7 +902,7 @@ function ContactRequests({ ctx }) {
   const [openReply, setOpenReply] = useStateD(null);
   const [draft, setDraft] = useStateD('');
   const openFor = (id) => { setOpenReply(id); setDraft(''); };
-  const send = (id) => { const t = draft.trim(); if (t.length < 2) return; store.answerContactRequest(id, t, store.S.coordProfile && store.S.coordProfile.name); setOpenReply(null); setDraft(''); };
+  const send = (id) => { const t = draft.trim(); if (t.length < 2) return; store.answerContactRequest(id, t, store.coordProfile && store.coordProfile.name); setOpenReply(null); setDraft(''); };
   return (
     <div className="pedal-panel">
       <div className="pedal-panelhead">
@@ -911,7 +975,7 @@ function ContactRequests({ ctx }) {
 function TrainersAdmin({ ctx }) {
   const { store } = ctx;
   const P = window.PEDAL;
-  const trainers = store.S.trainers;
+  const trainers = store.realTrainers || [];
   const [openT, setOpenT] = useStateD(null);
   const [f, setF] = useStateD({ name: '', dob: '', phone: '', email: '', locality: '' });
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
@@ -999,6 +1063,40 @@ function FieldLite({ label, children }) {
   return (<div><div style={{ font: '600 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>{label}</div>{children}</div>);
 }
 
+const ROLE_INFO = {
+  'Administração': { desc: 'Acesso total — Operação, Dashboards e Gestão. Pode criar, editar e eliminar utilizadores de coordenação.' },
+  'Coordenação': { desc: 'Acesso à Operação e Dashboards. Não tem acesso à área de Gestão nem pode gerir utilizadores.' },
+};
+function RoleSelect({ value, onChange }) {
+  const [hovered, setHovered] = useStateD(null);
+  const roles = ['Administração', 'Coordenação'];
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {roles.map((r) => {
+        const active = value === r;
+        const isHov = hovered === r;
+        return (
+          <div key={r}
+            onClick={() => onChange(r)}
+            onMouseEnter={() => setHovered(r)}
+            onMouseLeave={() => setHovered(null)}
+            style={{ borderRadius: 8, border: `1.5px solid ${active ? 'var(--primary)' : isHov ? 'var(--ink-soft)' : 'var(--line)'}`, background: active ? 'var(--primary-soft)' : isHov ? 'var(--surface-raised)' : 'var(--surface)', padding: '9px 12px', cursor: 'pointer', transition: 'border-color .15s, background .15s' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${active ? 'var(--primary)' : 'var(--ink-soft)'}`, background: active ? 'var(--primary)' : 'transparent', flexShrink: 0, transition: 'all .15s' }} />
+              <span style={{ font: `${active ? 700 : 600} 13px var(--ui)`, color: active ? 'var(--primary-deep)' : 'var(--ink)' }}>{r}</span>
+            </div>
+            {(isHov || active) && (
+              <div style={{ font: '400 12px/1.45 var(--ui)', color: 'var(--ink-soft)', marginTop: 6, paddingLeft: 22 }}>
+                {ROLE_INFO[r].desc}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SchedulingModal({ c, store, onClose }) {
   const P = window.PEDAL;
   const sc = store.S.scheduling[c.id] || {};
@@ -1015,7 +1113,7 @@ function SchedulingModal({ c, store, onClose }) {
   if (!stationId) missing.push('escolher o local de encontro');
   const canSubmit = missing.length === 0;
 
-  const trainers = store.S.trainers || [];
+  const trainers = store.realTrainers || [];
   const sorted = [...trainers].sort((a, b) => {
     const am = a.locality === c.locality ? 0 : 1, bm = b.locality === c.locality ? 0 : 1;
     return am - bm || a.name.localeCompare(b.name);
@@ -1027,7 +1125,15 @@ function SchedulingModal({ c, store, onClose }) {
 
   const confirm = () => {
     const chosen = c.live ? (sc.chosen != null ? sc.chosen : null) : (confirmIdx != null && confirmIdx < valid.length ? confirmIdx : null);
-    store.setScheduling(c.id, { slots: valid, chosen, trainerId: trainerId || null, stationId: stationId || null });
+    const schedData = { slots: valid, chosen, trainerId: trainerId || null, stationId: stationId || null };
+    store.setScheduling(c.id, schedData);
+    if (store.coordJwt && !c.live && c.id) {
+      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ scheduling: schedData }),
+      }).catch(() => {});
+    }
     const tName = (trainers.find((t) => t.id === trainerId) || {}).name;
     store.notify({ type: 'agendado', who: c.name, text: `recebeu ${valid.length} horário${valid.length > 1 ? 's' : ''} para a formação prática${tName ? ` · formador ${tName}` : ''}` });
     onClose();
@@ -1072,12 +1178,12 @@ function SchedulingModal({ c, store, onClose }) {
         )}
 
         <div style={lbl}>Local de encontro (parqueamento)</div>
-        {(store.S.stations || []).length === 0 ? (
+        {(store.realStations || []).length === 0 ? (
           <div className="pedal-taskempty"><Icon name="pin" size={16} color="var(--ink-soft)" />Sem locais — adiciona em Gestão → Locais de encontro.</div>
         ) : (
           <select className="pedal-select" style={{ width: '100%', minWidth: 0 }} value={stationId} onChange={(e) => setStationId(e.target.value)}>
             <option value="">— escolher local —</option>
-            {[...(store.S.stations || [])].sort((a, b) => ((a.locality === c.locality ? 0 : 1) - (b.locality === c.locality ? 0 : 1))).map((s) => (
+            {[...(store.realStations || [])].sort((a, b) => ((a.locality === c.locality ? 0 : 1) - (b.locality === c.locality ? 0 : 1))).map((s) => (
               <option key={s.id} value={s.id}>{s.name} · {s.locality}</option>
             ))}
           </select>
@@ -1122,7 +1228,7 @@ function CandidateDetail({ c, store, onClose }) {
   const [showChat, setShowChat] = useStateD(false);
   const [rejecting, setRejecting] = useStateD(false);
   const [reason, setReason] = useStateD('');
-  const readOnly = (store.coordRole || 'coordenacao') === 'apoio';
+  const readOnly = false;
   const isLiveC = c.live || c.id === store.S.candidateId;
   const curIdx = P.stageIndex(c.stage);
   const iv = c.interview || {};
@@ -1175,8 +1281,8 @@ function CandidateDetail({ c, store, onClose }) {
           const sc2 = store.S.scheduling[c.id];
           if (!sc2 || !((sc2.slots && sc2.slots.length) || sc2.trainerId)) return null;
           const chosen = sc2.chosen != null && sc2.slots ? sc2.slots[sc2.chosen] : null;
-          const tr = sc2.trainerId ? (store.S.trainers || []).find((t) => t.id === sc2.trainerId) : null;
-          const stn = sc2.stationId ? (store.S.stations || []).find((s) => s.id === sc2.stationId) : null;
+          const tr = sc2.trainerId ? (store.realTrainers || []).find((t) => t.id === sc2.trainerId) : null;
+          const stn = sc2.stationId ? (store.realStations || []).find((s) => s.id === sc2.stationId) : null;
           return (
             <div style={{ marginTop: 16 }}>
               <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 8 }}>Formação prática</div>
@@ -1286,8 +1392,9 @@ function GestaoScreen({ ctx }) {
     { id: 'users', label: 'Utilizadores de gestão', icon: 'people' },
     { id: 'formadores', label: 'Pilotos formadores', icon: 'shield' },
     { id: 'necessidades', label: 'Necessidades / vagas', icon: 'route' },
+    { id: 'localidades', label: 'Localidades', icon: 'pin' },
     { id: 'conteudos', label: 'Vídeos & conteúdos', icon: 'play' },
-    { id: 'locais', label: 'Locais de encontro', icon: 'pin' },
+    { id: 'locais', label: 'Locais de encontro', icon: 'map' },
     { id: 'export', label: 'Exportar base de dados', icon: 'doc' },
   ];
   const items = allowedGestao ? allItems.filter((it) => allowedGestao.includes(it.id)) : allItems;
@@ -1305,6 +1412,7 @@ function GestaoScreen({ ctx }) {
         {g === 'necessidades' && <NeedsAdmin store={store} />}
         {g === 'conteudos' && <ModuleContentAdmin store={store} />}
         {g === 'locais' && <StationsAdmin store={store} />}
+        {g === 'localidades' && <LocalidadesAdmin store={store} />}
         {g === 'export' && <ExportAllPanel candidates={candidates} store={store} />}
       </div>
     </div>
@@ -1313,46 +1421,179 @@ function GestaoScreen({ ctx }) {
 
 // Utilizadores da consola de gestão
 function GestaoUsers({ store }) {
-  const users = store.S.mgmtUsers || [];
-  const [f, setF] = useStateD({ name: '', email: '', phone: '', role: 'Coordenação' });
+  const { useEffect: useEffectGU } = React;
+  const [users, setUsers] = useStateD(null);
+  const [f, setF] = useStateD({ name: '', email: '', phone: '', role: 'Administração' });
+  const [loading, setLoading] = useStateD(false);
+  const [created, setCreated] = useStateD(null);
+  const [err, setErr] = useStateD('');
+  const [editing, setEditing] = useStateD(null);
+  const [editRole, setEditRole] = useStateD('Coordenação');
+  const [editLoading, setEditLoading] = useStateD(false);
+  const [editErr, setEditErr] = useStateD('');
+  const [confirmDel, setConfirmDel] = useStateD(null); // user a confirmar eliminação
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+  const loadUsers = () => {
+    fetch('http://localhost:3001/api/coord-users', {
+      headers: { 'Authorization': `Bearer ${store.coordJwt}` },
+    }).then((r) => r.json()).then((data) => { if (Array.isArray(data)) setUsers(data); }).catch(() => setUsers([]));
+  };
+  useEffectGU(() => { loadUsers(); }, []);
+
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim());
-  const valid = f.name.trim().length > 1 && emailOk;
-  const submit = () => { if (!valid) return; store.addMgmtUser({ name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role }); setF({ name: '', email: '', phone: '', role: 'Coordenação' }); };
+  const valid = f.name.trim().length > 1 && emailOk && !loading;
+
+  const submit = async () => {
+    if (!valid) return;
+    setLoading(true); setErr('');
+    try {
+      const res = await fetch('http://localhost:3001/api/coord-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'Erro ao criar utilizador.'); return; }
+      setCreated({ name: f.name.trim(), email: f.email.trim(), tempPassword: data.tempPassword });
+      setF({ name: '', email: '', phone: '', role: 'Administração' });
+      loadUsers();
+    } catch (_) { setErr('Sem ligação ao servidor.'); }
+    finally { setLoading(false); }
+  };
+
+  const startEdit = (u) => { setEditing(u); setEditRole(u.role); setEditErr(''); setConfirmDel(null); };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setEditLoading(true); setEditErr('');
+    try {
+      const res = await fetch(`http://localhost:3001/api/coord-users/${encodeURIComponent(editing.email)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ role: editRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEditErr(data.error || 'Erro ao actualizar.'); return; }
+      setEditing(null);
+      loadUsers();
+    } catch (_) { setEditErr('Sem ligação ao servidor.'); }
+    finally { setEditLoading(false); }
+  };
+
+  const deleteUser = async (u) => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/coord-users/${encodeURIComponent(u.email)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${store.coordJwt}` },
+      });
+      if (!res.ok) { const d = await res.json(); alert(d.error || 'Erro ao eliminar.'); return; }
+      setConfirmDel(null);
+      loadUsers();
+    } catch (_) { alert('Sem ligação ao servidor.'); }
+  };
+
+  const admins = users ? users.filter((u) => u.role === 'Administração') : [];
+  const coords = users ? users.filter((u) => u.role === 'Coordenação') : [];
+
+  const UserRow = ({ u }) => (
+    <div key={u.id} className="pedal-taskrow">
+      <div className="pedal-kav" style={{ background: 'var(--accent-soft)', color: 'var(--accent-deep)' }}>{(u.name || u.email).split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{u.name}</div>
+        <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{u.email}{u.phone ? ` · ${u.phone}` : ''}</div>
+      </div>
+      <button className="pedal-iconbtn" title="Editar função" onClick={() => startEdit(u)}>✎</button>
+      <button className="pedal-iconbtn" title="Eliminar" style={{ color: 'var(--primary)' }} onClick={() => { setConfirmDel(u); setEditing(null); }}>✕</button>
+    </div>
+  );
+
   return (
     <div className="pedal-dashgrid">
-      <div className="pedal-panel">
-        <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Utilizadores de gestão</span><Pill tone="neutral">{users.length}</Pill></div>
-        {users.length === 0 ? (
-          <div className="pedal-taskempty"><Icon name="people" size={16} color="var(--ink-soft)" />Ainda sem utilizadores.</div>
+      <div className="pedal-panel" style={{ display: 'grid', gap: 20 }}>
+        {users === null ? (
+          <div className="pedal-taskempty"><Icon name="people" size={16} color="var(--ink-soft)" />A carregar…</div>
         ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {users.map((u) => (
-              <div key={u.id} className="pedal-taskrow">
-                <div className="pedal-kav" style={{ background: 'var(--accent-soft)', color: 'var(--accent-deep)' }}>{u.name.split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{u.name} <span style={{ font: '500 11.5px var(--ui)', color: 'var(--accent-deep)' }}>· {u.role}</span></div>
-                  <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{u.email}{u.phone ? ` · ${u.phone}` : ''}</div>
-                </div>
-                <button className="pedal-iconbtn" title="Remover" onClick={() => store.removeMgmtUser(u.id)}>✕</button>
+          <>
+            <div>
+              <div className="pedal-panelhead" style={{ marginBottom: 8 }}>
+                <span style={{ font: '700 13px var(--ui)', color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Administração</span>
+                <Pill tone="neutral">{admins.length}</Pill>
               </div>
-            ))}
-          </div>
+              {admins.length === 0 ? (
+                <div className="pedal-taskempty"><Icon name="people" size={16} color="var(--ink-soft)" />Sem administradores.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>{admins.map((u) => <UserRow key={u.id} u={u} />)}</div>
+              )}
+            </div>
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+              <div className="pedal-panelhead" style={{ marginBottom: 8 }}>
+                <span style={{ font: '700 13px var(--ui)', color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Coordenação</span>
+                <Pill tone="neutral">{coords.length}</Pill>
+              </div>
+              {coords.length === 0 ? (
+                <div className="pedal-taskempty"><Icon name="people" size={16} color="var(--ink-soft)" />Sem coordenadores.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>{coords.map((u) => <UserRow key={u.id} u={u} />)}</div>
+              )}
+            </div>
+          </>
         )}
       </div>
+
       <div className="pedal-panel">
-        <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Adicionar utilizador</span></div>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <FieldLite label="Nome"><input className="pedal-input" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome e apelido" /></FieldLite>
-          <FieldLite label="Email"><input className="pedal-input" type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="nome@pedalarsemidade.pt" /></FieldLite>
-          <FieldLite label="Telefone"><input className="pedal-input" type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="9XX XXX XXX" /></FieldLite>
-          <FieldLite label="Função">
-            <select className="pedal-select" style={{ minWidth: 0, width: '100%' }} value={f.role} onChange={(e) => set('role', e.target.value)}>
-              <option>Coordenação</option><option>Gestão de formação</option><option>Administração</option><option>Apoio</option>
-            </select>
-          </FieldLite>
-          <button className="pedal-btn primary" disabled={!valid} style={{ width: '100%', opacity: valid ? 1 : 0.45, marginTop: 4 }} onClick={submit}>Adicionar utilizador</button>
-        </div>
+        {confirmDel ? (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Eliminar utilizador</div>
+            <div style={{ background: 'var(--primary-soft)', borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ font: '600 13px var(--ui)', color: 'var(--primary-deep)' }}>Tens a certeza que queres eliminar <strong>{confirmDel.name}</strong>?</div>
+              <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)', marginTop: 4 }}>{confirmDel.email} · {confirmDel.role}</div>
+              <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)', marginTop: 6 }}>Esta acção não pode ser desfeita.</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setConfirmDel(null)}>Cancelar</button>
+              <button className="pedal-btn primary" style={{ flex: 1 }} onClick={() => deleteUser(confirmDel)}>Eliminar</button>
+            </div>
+          </div>
+        ) : editing ? (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Editar função</div>
+            <div style={{ font: '500 13px var(--ui)', color: 'var(--ink-soft)' }}>{editing.name} · {editing.email}</div>
+            <FieldLite label="Nova função"><RoleSelect value={editRole} onChange={setEditRole} /></FieldLite>
+            {editErr && <div style={{ font: '500 12px var(--ui)', color: 'var(--accent-deep)' }}>{editErr}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setEditing(null)}>Cancelar</button>
+              <button className="pedal-btn primary" style={{ flex: 1 }} disabled={editLoading || editRole === editing.role} onClick={saveEdit}>
+                {editLoading ? 'A guardar…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        ) : created ? (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Conta criada</div>
+            <div style={{ background: 'var(--accent-soft)', borderRadius: 10, padding: '14px 16px', display: 'grid', gap: 6 }}>
+              <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>Envia estas credenciais a <strong style={{ color: 'var(--ink)' }}>{created.name}</strong>:</div>
+              <div style={{ font: '500 13px var(--ui)', color: 'var(--ink)' }}>Email: <strong>{created.email}</strong></div>
+              <div style={{ font: '500 13px var(--ui)', color: 'var(--ink)' }}>Password temporária: <strong style={{ fontFamily: 'monospace', background: 'var(--line)', padding: '2px 6px', borderRadius: 4 }}>{created.tempPassword}</strong></div>
+            </div>
+            <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: 0 }}>O utilizador deve alterar a password no primeiro login.</p>
+            <button className="pedal-btn ghost" style={{ width: '100%' }} onClick={() => setCreated(null)}>Adicionar outro</button>
+          </div>
+        ) : (
+          <>
+            <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Adicionar utilizador</span></div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <FieldLite label="Nome"><input className="pedal-input" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome e apelido" /></FieldLite>
+              <FieldLite label="Email"><input className="pedal-input" type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="nome@pedalarsemidade.pt" /></FieldLite>
+              <FieldLite label="Telefone"><input className="pedal-input" type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="9XX XXX XXX" /></FieldLite>
+              <FieldLite label="Função"><RoleSelect value={f.role} onChange={(v) => set('role', v)} /></FieldLite>
+              {err && <div style={{ font: '500 12px var(--ui)', color: 'var(--accent-deep)' }}>{err}</div>}
+              <button className="pedal-btn primary" disabled={!valid} style={{ width: '100%', opacity: valid ? 1 : 0.45, marginTop: 4 }} onClick={submit}>
+                {loading ? 'A criar…' : 'Adicionar utilizador'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1361,21 +1602,21 @@ function GestaoUsers({ store }) {
 // Base de necessidades / vagas abertas (localidade + disponibilidades)
 function NeedsAdmin({ store }) {
   const P = window.PEDAL;
-  const needs = store.S.needs || [];
+  const needs = store.realNeeds || [];
   const [f, setF] = useStateD({ locality: '', periods: [] });
-  const [newLoc, setNewLoc] = useStateD(false);
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
   const togglePeriod = (id) => setF((p) => ({ ...p, periods: p.periods.includes(id) ? p.periods.filter((x) => x !== id) : [...p.periods, id] }));
   const perName = (id) => (P.PERIODS.find((x) => x.id === id) || {}).name || id;
   const locOptions = (() => {
-    const seen = []; P.LOCALITIES.forEach((l) => { if (!seen.includes(l.name)) seen.push(l.name); });
-    (store.S.stations || []).forEach((s) => { if (s.locality && !seen.includes(s.locality)) seen.push(s.locality); });
+    const seen = [];
+    (store.realLocalities || P.LOCALITIES).forEach((l) => { if (!seen.includes(l.name)) seen.push(l.name); });
+    (store.realStations || []).forEach((s) => { if (s.locality && !seen.includes(s.locality)) seen.push(s.locality); });
     needs.forEach((n) => { if (n.locality && !seen.includes(n.locality)) seen.push(n.locality); });
     return seen;
   })();
   const dup = needs.some((n) => (n.locality || '').toLowerCase() === f.locality.trim().toLowerCase());
   const valid = f.locality.trim().length > 1 && !dup;
-  const submit = () => { if (!valid) return; store.addNeed({ locality: f.locality.trim(), periods: f.periods }); setF({ locality: '', periods: [] }); setNewLoc(false); };
+  const submit = () => { if (!valid) return; store.addNeed({ locality: f.locality.trim(), periods: f.periods }); setF({ locality: '', periods: [] }); };
   return (
     <div className="pedal-dashgrid">
       <div className="pedal-panel">
@@ -1414,19 +1655,10 @@ function NeedsAdmin({ store }) {
         <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Abrir nova vaga</span></div>
         <div style={{ display: 'grid', gap: 10 }}>
           <FieldLite label="Localidade">
-            {!newLoc ? (
-              <select className="pedal-select" style={{ minWidth: 0, width: '100%' }} value={f.locality}
-                onChange={(e) => { if (e.target.value === '__new') { setNewLoc(true); set('locality', ''); } else set('locality', e.target.value); }}>
-                <option value="">—</option>
-                {locOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-                <option value="__new">➕ Nova localidade…</option>
-              </select>
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="pedal-input" autoFocus value={f.locality} onChange={(e) => set('locality', e.target.value)} placeholder="Ex.: Vila do Conde" />
-                <button className="pedal-authlink" style={{ whiteSpace: 'nowrap' }} onClick={() => { setNewLoc(false); set('locality', ''); }}>Escolher da lista</button>
-              </div>
-            )}
+            <select className="pedal-select" style={{ minWidth: 0, width: '100%' }} value={f.locality} onChange={(e) => set('locality', e.target.value)}>
+              <option value="">—</option>
+              {locOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
           </FieldLite>
           <FieldLite label="Disponibilidades abertas">
             <div className="pedal-pickgrid">
@@ -1442,21 +1674,95 @@ function NeedsAdmin({ store }) {
   );
 }
 
+// Gestão de localidades activas
+function LocalidadesAdmin({ store }) {
+  const locs = store.realLocalities || [];
+  const [errors, setErrors] = useStateD({});
+  const [loading, setLoading] = useStateD({});
+  const [newName, setNewName] = useStateD('');
+  const [addErr, setAddErr] = useStateD('');
+  const [adding, setAdding] = useStateD(false);
+
+  const del = async (id) => {
+    setErrors((p) => ({ ...p, [id]: '' }));
+    setLoading((p) => ({ ...p, [id]: true }));
+    const res = await store.removeLocality(id);
+    setLoading((p) => ({ ...p, [id]: false }));
+    if (!res.ok) setErrors((p) => ({ ...p, [id]: res.error }));
+  };
+
+  const add = async () => {
+    const name = newName.trim();
+    if (name.length < 2) return;
+    setAdding(true); setAddErr('');
+    const res = await store.addLocality(name);
+    setAdding(false);
+    if (res.ok) setNewName('');
+    else setAddErr(res.error);
+  };
+
+  return (
+    <div className="pedal-dashgrid">
+      <div className="pedal-panel">
+        <div className="pedal-panelhead">
+          <span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Localidades activas</span>
+          <Pill tone={locs.length ? 'green' : 'amber'}>{locs.length}</Pill>
+        </div>
+        <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 14px' }}>
+          Só é possível eliminar uma localidade se não houver vagas abertas associadas.
+        </p>
+        {locs.length === 0 ? (
+          <div className="pedal-taskempty"><Icon name="pin" size={16} color="var(--ink-soft)" />Sem localidades definidas.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {locs.map((l) => (
+              <div key={l.id} style={{ display: 'grid', gap: 4 }}>
+                <div className="pedal-stationrow">
+                  <span style={{ color: 'var(--primary)', flexShrink: 0 }}><Icon name="pin" size={16} /></span>
+                  <span style={{ flex: 1, font: '600 13.5px var(--ui)', color: 'var(--ink)' }}>{l.name}</span>
+                  <button className="pedal-iconbtn" title="Eliminar localidade" disabled={!!loading[l.id]}
+                    onClick={() => del(l.id)}>✕</button>
+                </div>
+                {errors[l.id] && (
+                  <div style={{ font: '500 11.5px var(--ui)', color: 'var(--accent-deep)', paddingLeft: 28 }}>{errors[l.id]}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="pedal-panel">
+        <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Adicionar localidade</span></div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <FieldLite label="Nome">
+            <input className="pedal-input" value={newName} onChange={(e) => { setNewName(e.target.value); setAddErr(''); }}
+              placeholder="Ex.: Vila do Conde" onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+          </FieldLite>
+          {addErr && <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>{addErr}</div>}
+          <button className="pedal-btn primary" disabled={newName.trim().length < 2 || adding}
+            style={{ width: '100%', opacity: newName.trim().length < 2 || adding ? 0.45 : 1, marginTop: 2 }}
+            onClick={add}>Adicionar localidade</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Locais de encontro / parqueamento das bicicletas
 function StationsAdmin({ store }) {
   const P = window.PEDAL;
-  const stations = store.S.stations || [];
+  const stations = store.realStations || [];
   const [f, setF] = useStateD({ name: '', locality: '', address: '', note: '' });
-  const [newLoc, setNewLoc] = useStateD(false);  // a escrever uma localidade nova
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
-  // localidades disponíveis = base do projeto + as já usadas em locais criados (sem duplicar)
+  // localidades disponíveis = BD + as já usadas em locais criados (sem duplicar)
   const locOptions = (() => {
-    const seen = []; P.LOCALITIES.forEach((l) => { if (!seen.includes(l.name)) seen.push(l.name); });
+    const seen = [];
+    (store.realLocalities || P.LOCALITIES).forEach((l) => { if (!seen.includes(l.name)) seen.push(l.name); });
     stations.forEach((s) => { if (s.locality && !seen.includes(s.locality)) seen.push(s.locality); });
     return seen;
   })();
   const valid = f.name.trim().length > 1 && f.locality.trim();
-  const submit = () => { if (!valid) return; store.addStation({ name: f.name.trim(), locality: f.locality.trim(), address: f.address.trim(), note: f.note.trim() }); setF({ name: '', locality: '', address: '', note: '' }); setNewLoc(false); };
+  const submit = () => { if (!valid) return; store.addStation({ name: f.name.trim(), locality: f.locality.trim(), address: f.address.trim(), note: f.note.trim() }); setF({ name: '', locality: '', address: '', note: '' }); };
   return (
     <div className="pedal-dashgrid">
       <div className="pedal-panel">
@@ -1485,19 +1791,10 @@ function StationsAdmin({ store }) {
         <div style={{ display: 'grid', gap: 10 }}>
           <FieldLite label="Nome do local"><input className="pedal-input" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex.: Base de Matosinhos" /></FieldLite>
           <FieldLite label="Localidade">
-            {!newLoc ? (
-              <select className="pedal-select" style={{ minWidth: 0, width: '100%' }} value={f.locality}
-                onChange={(e) => { if (e.target.value === '__new') { setNewLoc(true); set('locality', ''); } else set('locality', e.target.value); }}>
-                <option value="">—</option>
-                {locOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-                <option value="__new">➕ Nova localidade…</option>
-              </select>
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="pedal-input" autoFocus value={f.locality} onChange={(e) => set('locality', e.target.value)} placeholder="Ex.: Vila do Conde" />
-                <button className="pedal-authlink" style={{ whiteSpace: 'nowrap' }} onClick={() => { setNewLoc(false); set('locality', ''); }}>Escolher da lista</button>
-              </div>
-            )}
+            <select className="pedal-select" style={{ minWidth: 0, width: '100%' }} value={f.locality} onChange={(e) => set('locality', e.target.value)}>
+              <option value="">—</option>
+              {locOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
           </FieldLite>
           <FieldLite label="Morada"><input className="pedal-input" value={f.address} onChange={(e) => set('address', e.target.value)} placeholder="Rua, número, localidade" /></FieldLite>
           <FieldLite label="Nota (opcional)"><input className="pedal-input" value={f.note} onChange={(e) => set('note', e.target.value)} placeholder="Ex.: 2 triciclos · entrada lateral" /></FieldLite>
@@ -1548,7 +1845,7 @@ function AnalyticsScreen({ ctx }) {
   const activeDays = candidates.filter((c) => c.stage === 'ativo' && c.days).map((c) => c.days);
   const avgDays = activeDays.length ? Math.round(activeDays.reduce((a, b) => a + b, 0) / activeDays.length) : 0;
   const emFormacao = candidates.filter((c) => c.stage === 'onboarding' || c.stage === 'pratica' || c.stage === 'formalizacao').length;
-  const formadores = (store.S.trainers || []).length;
+  const formadores = (store.realTrainers || []).length;
 
   const byStage = P.STAGES.filter((s) => s.id !== 'rejeitado').map((s) => ({ label: s.label, n: candidates.filter((c) => c.stage === s.id).length })).filter((x) => x.n > 0);
   const byLoc = P.LOCALITIES.map((l) => ({ label: l.name, n: candidates.filter((c) => c.localityId === l.id || c.locality === l.name).length })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);

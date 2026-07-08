@@ -5,19 +5,59 @@ const { useState: useStateAu } = React;
 // ── Porta de entrada do agente: login ou nova candidatura ───────────
 function AuthGate({ store }) {
   const S = store.S;
-  const hasAccount = !!S.account;
-  const [mode, setMode] = useStateAu(hasAccount ? 'login' : 'novo');
+  const [mode, setMode] = useStateAu('novo');
   const [email, setEmail] = useStateAu('');
   const [pw, setPw] = useStateAu('');
   const [err, setErr] = useStateAu('');
-  const [hint, setHint] = useStateAu(false);
+  const [loading, setLoading] = useStateAu(false);
 
-  const tryLogin = () => {
-    const acc = S.account;
-    if (!acc) { setErr('Ainda não tens conta. As credenciais são enviadas por email depois da inscrição.'); return; }
-    if (email.trim().toLowerCase() === (acc.email || '').toLowerCase() && pw.trim() === acc.password) {
-      setErr(''); store.setSession(true);
-    } else { setErr('Email ou palavra-passe incorretos. Confirma os dados enviados por email.'); }
+  const tryLogin = async () => {
+    if (!email.trim() || !pw.trim()) return;
+    setLoading(true); setErr('');
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ email: email.trim(), password: pw.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error_description || 'Email ou palavra-passe incorretos.'); return; }
+
+      const jwt = data.access_token;
+      const meta = (data.user && data.user.user_metadata) || {};
+
+      if (meta.role === 'coordinator') {
+        window.location.href = 'coordenacao.html';
+        return;
+      }
+
+      const meRes = await fetch('http://localhost:3001/api/candidates/me', {
+        headers: { 'Authorization': `Bearer ${jwt}` },
+      });
+      if (!meRes.ok) { setErr('Conta encontrada, mas sem perfil de candidato associado.'); return; }
+      const profile = await meRes.json();
+
+      const STAGE_TO_NODE = { inscricao: 'triage', apresentacao: 'present', triagem: 'triage_result', espera: 'await_waitinglist', entrevista: 'interview', validacao: 'await_validation', onboarding: 'goto_onboarding', pratica: 'await_reschedule', ativo: 'active_home' };
+      const node = (store.S.chat && store.S.chat.node) || STAGE_TO_NODE[profile.stage] || 'triage';
+      const perData = window.PEDAL && window.PEDAL.PERIODS;
+      const locs = window.PEDAL && window.PEDAL.LOCALITIES;
+      const periods = profile.periods ? profile.periods.split(', ').filter(Boolean).map((n) => { const f = perData && perData.find((p) => p.name === n); return f ? f.id : n; }) : [];
+      const localities = profile.locality ? profile.locality.split(', ').filter(Boolean).map((n) => { const f = locs && locs.find((l) => l.name === n); return f ? f.id : n; }) : [];
+      const savedMessages = Array.isArray(profile.chat_messages) && profile.chat_messages.length ? profile.chat_messages : [];
+      store.up({ candidateId: profile.id, account: { email: email.trim(), password: pw.trim() }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
+      store.patchCandidate({ name: profile.name || '', email: profile.email || '', dob: profile.dob || '', contact: profile.phone || '', cc: profile.cc || '', localities, periods });
+      store.setStage(profile.stage || 'inscricao');
+      if (profile.scheduling && profile.scheduling.slots && profile.scheduling.slots.length) {
+        store.setScheduling('live', profile.scheduling);
+      }
+      store.setChat({ node, restoreInteraction: true });
+      store.setSession(true);
+      store.setCandidateJwt(jwt);
+    } catch (_) {
+      setErr('Erro de ligação ao servidor.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -45,24 +85,10 @@ function AuthGate({ store }) {
               <input className="pedal-input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="A que recebeste por email" />
             </Field>
             {err && <div className="pedal-autherr"><Icon name="shield" size={14} />{err}</div>}
-            <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} onClick={tryLogin}>Entrar</button>
-            {hasAccount ? (
-              <div style={{ marginTop: 12 }}>
-                <button className="pedal-authlink" onClick={() => setHint((h) => !h)}>{hint ? 'Ocultar credenciais de demonstração' : 'Esqueci-me dos dados de acesso'}</button>
-                {hint && (
-                  <div className="pedal-credhint">
-                    <span style={{ font: '700 10.5px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>Demonstração · enviadas por email</span>
-                    <div className="pedal-credrow"><span>Email</span><strong>{S.account.email}</strong></div>
-                    <div className="pedal-credrow"><span>Palavra-passe</span><strong>{S.account.password}</strong></div>
-                    <button className="pedal-btn ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => { setEmail(S.account.email); setPw(S.account.password); }}>Preencher automaticamente</button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '14px 0 0', textAlign: 'center' }}>
-                Ainda sem conta? As credenciais chegam por email assim que terminares a inscrição.
-              </p>
-            )}
+            <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} disabled={loading || !email.trim() || !pw.trim()} onClick={tryLogin}>{loading ? 'A entrar…' : 'Entrar'}</button>
+            <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '14px 0 0', textAlign: 'center' }}>
+              As credenciais chegam por email assim que terminares a inscrição.
+            </p>
           </div>
         ) : (
           <div style={{ marginTop: 16 }}>
@@ -121,6 +147,10 @@ function LoginPanel({ store }) {
 
       if (role === 'coordinator') {
         if (window.__PEDAL_MODE === 'coord') {
+          const ROLE_DISPLAY = { administracao: 'Administração', coordenacao: 'Coordenação' };
+          const roleValues = Object.values(ROLE_DISPLAY);
+          const displayName = (meta.name && !roleValues.includes(meta.name)) ? meta.name : email.trim().split('@')[0];
+          store.setCoordProfile({ name: displayName, email: email.trim(), phone: meta.phone || '', role: ROLE_DISPLAY[coordRole] || 'Coordenação' });
           store.setCoordRole(coordRole);
           store.setCoordJwt(jwt);
         } else {
@@ -167,6 +197,9 @@ function LoginPanel({ store }) {
       store.up({ candidateId: profile.id, account: { email: email.trim(), password: pw.trim() }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
       store.patchCandidate({ name: profile.name || '', email: profile.email || '', dob: profile.dob || '', contact: profile.phone || '', cc: profile.cc || '', localities, periods, availability });
       store.setStage(profile.stage || 'inscricao');
+      if (profile.scheduling && profile.scheduling.slots && profile.scheduling.slots.length) {
+        store.setScheduling('live', profile.scheduling);
+      }
       store.setChat({ node, restoreInteraction: true });
       store.setSession(true);
       store.setCandidateJwt(jwt);
@@ -177,6 +210,28 @@ function LoginPanel({ store }) {
       setLoading(false);
     }
   };
+
+  if (S.emailVerificationRequired) {
+    return (
+      <div className="pedal-screen">
+        <TabHeader title="Verifica o teu email" subtitle="Último passo antes de entrares" />
+        <div className="pedal-tabbody">
+          <div className="pedal-authcard" style={{ margin: 0, textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+            <div style={{ font: '800 17px var(--display)', color: 'var(--ink)', marginBottom: 8 }}>Confirma o teu email</div>
+            <p style={{ font: '400 13px/1.6 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 16px' }}>
+              Enviámos um email de confirmação para <strong style={{ color: 'var(--ink)' }}>{S.account?.email}</strong>.<br />
+              Abre-o e clica no link para activar a tua conta.
+            </p>
+            <div style={{ background: 'var(--surface-raised)', borderRadius: 10, padding: '12px 14px', font: '500 12px/1.5 var(--ui)', color: 'var(--ink-soft)', textAlign: 'left', marginBottom: 16 }}>
+              Não encontras o email? Verifica a pasta de spam ou lixo.
+            </div>
+            <button className="pedal-btn ghost" style={{ width: '100%' }} onClick={() => store.goTab('conversa')}>Voltar à conversa</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pedal-screen">
@@ -374,7 +429,14 @@ function CoordLoginScreen({ store }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error_description || 'Credenciais inválidas'); return; }
-      if (data.user?.user_metadata?.role !== 'coordinator') { setErr('Esta conta não tem acesso à coordenação'); return; }
+      const meta = data.user?.user_metadata || {};
+      if (meta.role !== 'coordinator') { setErr('Esta conta não tem acesso à coordenação'); return; }
+      const coordRole = meta.coord_role || 'coordenacao';
+      const ROLE_DISPLAY = { administracao: 'Administração', coordenacao: 'Coordenação' };
+      const roleValues = Object.values(ROLE_DISPLAY);
+      const displayName = (meta.name && !roleValues.includes(meta.name)) ? meta.name : email.split('@')[0];
+      store.setCoordProfile({ name: displayName, email, phone: meta.phone || '', role: ROLE_DISPLAY[coordRole] || 'Coordenação' });
+      store.setCoordRole(coordRole);
       store.setCoordJwt(data.access_token);
     } catch (e) {
       setErr('Erro de ligação ao servidor');

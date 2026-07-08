@@ -31,18 +31,36 @@ function FormacaoView({ store }) {
     const isDone = !!done[m.id];
     const content = (S.moduleContent || {})[m.id] || {};
     const vid = (content.videos && content.videos[0]) || content.video || null;
+    const ytId = vid && (vid.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&\s]+)/) || vid.match(/(?:https?:\/\/)?youtu\.be\/([^?\s]+)/))?.[1];
+    const embedUrl = ytId ? `https://www.youtube.com/embed/${ytId}` : null;
     return (
       <div className="pedal-screen">
         <TabHeader title={m.type} subtitle={m.dur} onBack={() => setOpen(null)} />
         <div className="pedal-tabbody">
-          <div style={{ position: 'relative' }}>
-            <Placeholder label={vid ? `vídeo · ${m.title}` : `${m.type} · ${m.title}`} height={188} radius={16} />
-            {(m.type === 'Vídeo' || vid) && (
-              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          {embedUrl ? (
+            <div style={{ borderRadius: 16, overflow: 'hidden', background: '#000' }}>
+              <iframe src={embedUrl} style={{ width: '100%', height: 188, border: 'none', display: 'block' }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen />
+            </div>
+          ) : vid ? (
+            <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => window.open(vid.startsWith('http') ? vid : 'https://' + vid, '_blank')}>
+              <Placeholder label={`vídeo · ${m.title}`} height={188} radius={16} />
+              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ width: 54, height: 54, borderRadius: '50%', background: 'rgba(255,255,255,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(0,0,0,.18)' }}><Icon name="play" size={22} color="var(--primary)" /></span>
               </span>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div style={{ position: 'relative' }}>
+              <Placeholder label={`${m.type} · ${m.title}`} height={188} radius={16} />
+              {m.type === 'Vídeo' && (
+                <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                  <span style={{ width: 54, height: 54, borderRadius: '50%', background: 'rgba(255,255,255,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(0,0,0,.18)' }}><Icon name="play" size={22} color="var(--primary)" /></span>
+                </span>
+              )}
+            </div>
+          )}
+
           <div style={{ font: '700 18px var(--display)', color: 'var(--ink)', marginTop: 16 }}>{m.title}</div>
           <p style={{ font: '400 14px/1.6 var(--ui)', color: 'var(--ink-soft)', marginTop: 8 }}>{m.desc}</p>
           {isDone ? (

@@ -23,6 +23,7 @@ function Icon({ name, size = 20, color = 'currentColor', stroke = 2 }) {
     case 'heart':   return <svg {...p}><path d="M12 20s-7-4.6-9.2-9C1.3 8 3 4.5 6.5 4.5 9 4.5 12 7 12 7s3-2.5 5.5-2.5C21 4.5 22.7 8 21.2 11 19 15.4 12 20 12 20z" /></svg>;
     case 'sparkle': return <svg {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6" /></svg>;
     case 'people':  return <svg {...p}><circle cx="9" cy="8" r="3" /><path d="M3 19c.8-3 3.2-4.5 6-4.5S14.2 16 15 19" /><path d="M16 5.5a3 3 0 010 5.8M18 19c-.3-2-1.2-3.3-2.5-4" /></svg>;
+    case 'map':     return <svg {...p}><path d="M3 7l5 2 8-4 5 2v12l-5-2-8 4-5-2z" /><path d="M8 9v10M16 5v10" /></svg>;
     default: return null;
   }
 }
