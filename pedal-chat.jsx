@@ -240,6 +240,13 @@ function ChatView({ store, tone = 'caloroso' }) {
     else {
       addMessage({ from: 'system', text: '✓ Entrevista concluída — dados enviados à coordenação' });
       notify({ type: 'entrevista', text: 'concluiu a entrevista — aguarda validação' });
+      if (S.candidateId && store.candidateJwt) {
+        fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
+          body: JSON.stringify({ interview: answers }),
+        }).catch(() => {});
+      }
       enterNode('await_validation');
     }
   }
