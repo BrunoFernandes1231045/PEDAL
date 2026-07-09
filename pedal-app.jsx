@@ -93,6 +93,29 @@ function App() {
     }, 1500);
   }, [S.messages, candidateJwt]);
 
+  // Polling do agendamento — candidato busca o seu registo para detectar proposta da coordenação
+  useEffectA(() => {
+    if (!S.candidateId || !candidateJwt) return;
+    const pollSched = () => {
+      fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+        headers: { 'Authorization': `Bearer ${candidateJwt}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data || !data.scheduling) return;
+          setS((p) => {
+            const cur = p.scheduling[p.candidateId];
+            if (JSON.stringify(cur) === JSON.stringify(data.scheduling)) return p;
+            return { ...p, scheduling: { ...p.scheduling, [p.candidateId]: data.scheduling } };
+          });
+        })
+        .catch(() => {});
+    };
+    pollSched();
+    const timer = setInterval(pollSched, 15000);
+    return () => clearInterval(timer);
+  }, [S.candidateId, candidateJwt]);
+
   // Re-autentica na carga da página se já tem credenciais guardadas mas não tem JWT
   useEffectA(() => {
     if (!S.account?.email || !S.account?.password || candidateJwt) return;
@@ -255,23 +278,24 @@ function App() {
 
   useEffectA(() => {
     if (!coordJwt) { setRealCandidates(null); return; }
-    fetch('http://localhost:3001/api/candidates', {
-      headers: { 'Authorization': `Bearer ${coordJwt}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!Array.isArray(data)) return;
-        setRealCandidates(data.map((c) => {
-          const parts = (c.name || '').split(' ');
-          const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
-          const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
-          const perData = window.PEDAL && window.PEDAL.PERIODS;
-          const rawPeriods = c.periods ? c.periods.split(', ').filter(Boolean) : [];
-          const periods = rawPeriods.map((p) => { const f = perData && perData.find((x) => x.name === p); return f ? f.id : p; });
-          return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', cc: c.cc || '', profissao: c.profissao || '', nif: c.nif || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods, availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '' };
-        }));
-      })
-      .catch(() => {});
+    const mapC = (c) => {
+      const parts = (c.name || '').split(' ');
+      const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
+      const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
+      const perData = window.PEDAL && window.PEDAL.PERIODS;
+      const rawPeriods = c.periods ? c.periods.split(', ').filter(Boolean) : [];
+      const periods = rawPeriods.map((p) => { const f = perData && perData.find((x) => x.name === p); return f ? f.id : p; });
+      return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', cc: c.cc || '', profissao: c.profissao || '', nif: c.nif || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods, availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '', scheduling: c.scheduling || null, interview: c.interview || null };
+    };
+    const loadCandidates = () => {
+      fetch('http://localhost:3001/api/candidates', { headers: { 'Authorization': `Bearer ${coordJwt}` } })
+        .then((r) => r.json())
+        .then((data) => { if (Array.isArray(data)) setRealCandidates(data.map(mapC)); })
+        .catch(() => {});
+    };
+    loadCandidates();
+    const pollTimer = setInterval(loadCandidates, 20000);
+    return () => clearInterval(pollTimer);
   }, [coordJwt]);
 
   // Sincroniza stage com o backend sempre que muda

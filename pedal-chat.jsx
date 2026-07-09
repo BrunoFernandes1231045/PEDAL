@@ -292,6 +292,13 @@ function ChatView({ store, tone = 'caloroso' }) {
     const c = S.candidate;
     addMessage({ from: 'user', text: fromBooked ? 'Preciso de remarcar a formação prática' : 'Nenhuma destas datas me serve' });
     store.setScheduling(activeSchedKey, { slots: [], chosen: null, rescheduleRequested: true });
+    if (S.candidateId && store.candidateJwt) {
+      fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
+        body: JSON.stringify({ scheduling: { slots: [], chosen: null, rescheduleRequested: true } }),
+      }).catch(() => {});
+    }
     setStage('pratica');
     notify({ type: 'agendado', text: fromBooked ? 'precisa de remarcar a formação prática' : 'pediu novas datas para a formação prática' });
     store.addContactRequest({ name: c.name || 'Voluntário', contact: c.contact || '', email: c.email || '', live: true,
@@ -555,6 +562,13 @@ function ChatView({ store, tone = 'caloroso' }) {
         const s = slots[idx]; const label = `${P.fmtDate(s.date)} às ${s.time}`;
         addMessage({ from: 'user', text: label });
         store.setScheduling(activeSchedKey, { chosen: idx, rescheduleRequested: false });
+        if (S.candidateId && store.candidateJwt) {
+          fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
+            body: JSON.stringify({ scheduling: { ...(liveSched || {}), chosen: idx, rescheduleRequested: false } }),
+          }).catch(() => {});
+        }
         setStage('pratica');
         notify({ type: 'agendado', text: `agendou a formação prática para ${label}` });
         addMessage({ from: 'system', text: `Formação prática agendada · ${label}` });

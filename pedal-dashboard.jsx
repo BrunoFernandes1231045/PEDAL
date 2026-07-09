@@ -87,7 +87,7 @@ function Dashboard({ store }) {
     store.patchRealCandidate(c.id, { stage: 'onboarding' });
     store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
   }
-  const schedOf = (c) => S.scheduling[c.id] || null;
+  const schedOf = (c) => c.scheduling || S.scheduling[c.id] || null;
 
   const cEspera = candidates.filter((c) => c.stage === 'espera').length;
   const cPratica = candidates.filter((c) => c.stage === 'pratica').length;
@@ -837,7 +837,7 @@ function exportCandidates(rows, store, fileId) {
   const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const lines = [cols.join(';')];
   rows.forEach((c) => {
-    const sc = store.S.scheduling[c.id] || null;
+    const sc = c.scheduling || store.S.scheduling[c.id] || null;
     const ag = sc && sc.chosen != null && sc.slots && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
     const trainer = sc && sc.trainerId ? ((store.realTrainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
     // disponibilidade: usa availability (dia+período) se disponível, senão periods
@@ -1127,12 +1127,13 @@ function SchedulingModal({ c, store, onClose }) {
     const chosen = c.live ? (sc.chosen != null ? sc.chosen : null) : (confirmIdx != null && confirmIdx < valid.length ? confirmIdx : null);
     const schedData = { slots: valid, chosen, trainerId: trainerId || null, stationId: stationId || null };
     store.setScheduling(c.id, schedData);
-    if (store.coordJwt && !c.live && c.id) {
-      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+    const backendId = c.live ? store.S.candidateId : c.id;
+    if (backendId && store.coordJwt) {
+      fetch(`http://localhost:3001/api/candidates/${backendId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ scheduling: schedData }),
-      }).catch(() => {});
+      }).then(() => store.patchRealCandidate(backendId, { scheduling: schedData })).catch(() => {});
     }
     const tName = (trainers.find((t) => t.id === trainerId) || {}).name;
     store.notify({ type: 'agendado', who: c.name, text: `recebeu ${valid.length} horário${valid.length > 1 ? 's' : ''} para a formação prática${tName ? ` · formador ${tName}` : ''}` });
@@ -1280,7 +1281,7 @@ function CandidateDetail({ c, store, onClose }) {
         )}
 
         {(() => {
-          const sc2 = store.S.scheduling[c.id];
+          const sc2 = c.scheduling || store.S.scheduling[c.id];
           if (!sc2 || !((sc2.slots && sc2.slots.length) || sc2.trainerId)) return null;
           const chosen = sc2.chosen != null && sc2.slots ? sc2.slots[sc2.chosen] : null;
           const tr = sc2.trainerId ? (store.realTrainers || []).find((t) => t.id === sc2.trainerId) : null;
