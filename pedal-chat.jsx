@@ -188,7 +188,7 @@ function ChatView({ store, tone = 'caloroso' }) {
   }
 
   function pickedSlotText() {
-    const sc = S.scheduling && (S.scheduling[S.candidateId || 'live'] || S.scheduling.live);
+    const sc = S.scheduling && S.scheduling[activeSchedKey];
     if (!sc || sc.chosen == null || !sc.slots[sc.chosen]) return '';
     const s = sc.slots[sc.chosen];
     return `${P.fmtDate(s.date)} às ${s.time}`;
@@ -282,7 +282,7 @@ function ChatView({ store, tone = 'caloroso' }) {
   function requestReschedule(fromBooked) {
     const c = S.candidate;
     addMessage({ from: 'user', text: fromBooked ? 'Preciso de remarcar a formação prática' : 'Nenhuma destas datas me serve' });
-    store.setScheduling(S.candidateId || 'live', { slots: [], chosen: null, rescheduleRequested: true });
+    store.setScheduling(activeSchedKey, { slots: [], chosen: null, rescheduleRequested: true });
     setStage('pratica');
     notify({ type: 'agendado', text: fromBooked ? 'precisa de remarcar a formação prática' : 'pediu novas datas para a formação prática' });
     store.addContactRequest({ name: c.name || 'Voluntário', contact: c.contact || '', email: c.email || '', live: true,
@@ -338,7 +338,9 @@ function ChatView({ store, tone = 'caloroso' }) {
 
   // a coordenação propôs horários → o chat mostra-os para o candidato escolher
   const schedKey = S.candidateId || 'live';
-  const liveSched = (S.scheduling && (S.scheduling[schedKey] || S.scheduling.live)) || null;
+  // determine which key actually holds the proposal (coordinator may have used 'live' before candidate was in backend)
+  const activeSchedKey = (S.scheduling && S.scheduling[schedKey]) ? schedKey : 'live';
+  const liveSched = (S.scheduling && S.scheduling[activeSchedKey]) || null;
   const hasProposals = !!(liveSched && liveSched.slots && liveSched.slots.length && liveSched.chosen == null);
   useEffectC(() => {
     if (hasProposals && node !== 'schedule_practical' && node !== 'practical_booked') enterNode('schedule_practical');
@@ -543,7 +545,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       return <SchedulePicker slots={slots} station={station} onRequestNew={() => requestReschedule(false)} onPick={(idx) => {
         const s = slots[idx]; const label = `${P.fmtDate(s.date)} às ${s.time}`;
         addMessage({ from: 'user', text: label });
-        store.setScheduling(S.candidateId || 'live', { chosen: idx, rescheduleRequested: false });
+        store.setScheduling(activeSchedKey, { chosen: idx, rescheduleRequested: false });
         setStage('pratica');
         notify({ type: 'agendado', text: `agendou a formação prática para ${label}` });
         addMessage({ from: 'system', text: `Formação prática agendada · ${label}` });
