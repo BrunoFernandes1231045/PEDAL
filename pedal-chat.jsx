@@ -85,7 +85,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         ];
       }
       case 'waitlisted': return [{ text: 'Combinado, ficas na nossa lista! 💛 Entretanto posso esclarecer dúvidas — ou ligo-te à equipa quando quiseres.' }];
-      case 'interview': return [{ text: `Vou fazer-te ${INTERVIEW.length} perguntas rápidas para a coordenação te conhecer. 🙌` }, { text: INTERVIEW[0].q }];
+      case 'interview': return [{ text: 'Vou fazer-te algumas perguntas para a coordenação te conhecer. 🙌' }, { text: INTERVIEW[0].q }];
       case 'await_validation': return [{ text: 'Obrigado pela partilha! 🙏 A coordenação vai rever a tua candidatura — normalmente em 1 a 2 dias.' }];
       case 'role_profile': return [{ text: 'Antes da formação, conhece o perfil do piloto e o nosso compromisso mútuo.' }];
       case 'goto_onboarding': return [{ text: 'Tudo a postos! 🎓 Preparei a tua formação: 6 módulos curtos. Podes voltar a qualquer vídeo quando quiseres, sem perder o progresso.' }];
@@ -230,8 +230,10 @@ function ChatView({ store, tone = 'caloroso' }) {
 
   function answerInterview(qid, value) {
     addMessage({ from: 'user', text: value });
-    patchCandidate({ interview: { ...(S.candidate.interview || {}), [qid]: value } });
-    const i = ((S.chat && S.chat.interviewStep) || 0) + 1;
+    const answers = { ...(S.candidate.interview || {}), [qid]: value };
+    patchCandidate({ interview: answers });
+    let i = ((S.chat && S.chat.interviewStep) || 0) + 1;
+    while (i < INTERVIEW.length && INTERVIEW[i].skipUnless && answers[INTERVIEW[i].skipUnless.id] !== INTERVIEW[i].skipUnless.value) i++;
     setChat({ interviewStep: i });
     setInteraction(null);
     if (i < INTERVIEW.length) say([{ text: INTERVIEW[i].q }], () => setInteraction(stepInteraction(i)));

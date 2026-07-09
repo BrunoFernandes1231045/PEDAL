@@ -98,14 +98,15 @@ PEDAL.matchFAQ = function (text) {
 
 // ── Entrevista estruturada (RF-12) ───────────────────────────────────
 PEDAL.INTERVIEW = [
-  { id: 'exp', kind: 'choice', q: 'A andar de bicicleta, como te descreves?',
-    options: ['Ando com confiança', 'Ando, mas com ferrugem', 'Quase nunca ando'] },
-  { id: 'triciclo', kind: 'choice', q: 'Sentes-te à vontade para aprender a conduzir um triciclo elétrico com um passageiro?',
-    options: ['Sim, com formação', 'Tenho algum receio', 'Prefiro falar primeiro'] },
-  { id: 'carta', kind: 'choice', q: 'Tens carta de condução? (não é obrigatória)',
+  { id: 'gdpr', kind: 'choice',
+    q: 'Autorizas e aceitas o tratamento e acesso dos teus dados pessoais, cedidos no âmbito da candidatura como voluntário da Parábola Citadina Associação, dando permissão para seres contactado via e-mail ou telefone no âmbito deste projeto?',
     options: ['Sim', 'Não'] },
-  { id: 'motivacao', kind: 'choice', q: 'O que mais te move para seres piloto?',
-    options: ['Conviver com pessoas', 'Dar de volta à comunidade', 'Estar ao ar livre', 'Tudo um pouco'] },
+  { id: 'conhecimento', kind: 'text', q: 'Como tiveste conhecimento do projeto?' },
+  { id: 'voluntariado', kind: 'choice', q: 'Já fizeste voluntariado?', options: ['Sim', 'Não'] },
+  { id: 'voluntariado_info', kind: 'text', q: 'Se já fizeste voluntariado antes, conta-nos sobre isso!',
+    skipUnless: { id: 'voluntariado', value: 'Sim' } },
+  { id: 'bicicleta', kind: 'text', q: 'Tens experiência ou gostas de andar de bicicleta?' },
+  { id: 'carta', kind: 'choice', q: 'Possuis carta de condução?', options: ['Sim', 'Não'] },
 ];
 
 // ── Onboarding / tutorial guiado (RF-15 a RF-20) ─────────────────────
