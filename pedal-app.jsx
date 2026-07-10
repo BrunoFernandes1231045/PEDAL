@@ -61,7 +61,10 @@ function App() {
   const [realStations, setRealStations] = useStateA(null);
   const [realLocalities, setRealLocalities] = useStateA(null);
   const [candidateJwt, setCandidateJwtRaw] = useStateA(null);
+  const [chatLoaded, setChatLoaded] = useStateA(false);
   const msgSyncTimer = useRefA();
+  const nodeSyncTimer = useRefA();
+  const chatLoadedFor = useRefA(null);
 
   useEffectA(() => { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }, [S]);
 
@@ -76,22 +79,72 @@ function App() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // Guarda mensagens na BD sempre que mudam (debounced 1.5s) — restauro em qualquer dispositivo
+  // Guarda mensagens na BD sempre que mudam (debounced 1.5s)
   useEffectA(() => {
     clearTimeout(msgSyncTimer.current);
     if (!S.candidateId || !candidateJwt || !S.messages.length) return;
     msgSyncTimer.current = setTimeout(() => {
-      console.log('[PEDAL] a guardar', S.messages.length, 'mensagens na BD...');
       fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${candidateJwt}` },
         body: JSON.stringify({ chat_messages: S.messages }),
-      })
-        .then((r) => r.json())
-        .then(() => console.log('[PEDAL] mensagens guardadas ✓'))
-        .catch((e) => console.error('[PEDAL] erro ao guardar mensagens:', e));
+      }).catch(() => {});
     }, 1500);
   }, [S.messages, candidateJwt]);
+
+  // Guarda nó actual do chat na BD (debounced 1s)
+  const chatNode = S.chat ? S.chat.node : null;
+  useEffectA(() => {
+    clearTimeout(nodeSyncTimer.current);
+    if (!S.candidateId || !candidateJwt || !chatNode) return;
+    nodeSyncTimer.current = setTimeout(() => {
+      fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${candidateJwt}` },
+        body: JSON.stringify({ chat_node: chatNode }),
+      }).catch(() => {});
+    }, 1000);
+  }, [chatNode, S.candidateId, candidateJwt]);
+
+  // Carrega histórico de mensagens e nó quando candidato autentica (uma vez por candidato)
+  useEffectA(() => {
+    if (!S.candidateId || !candidateJwt) {
+      if (!chatLoaded) setChatLoaded(true);
+      return;
+    }
+    if (chatLoadedFor.current === S.candidateId) {
+      if (!chatLoaded) setChatLoaded(true);
+      return;
+    }
+    fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+      headers: { 'Authorization': `Bearer ${candidateJwt}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data) return;
+        const msgs = Array.isArray(data.chat_messages) && data.chat_messages.length > 0 ? data.chat_messages : null;
+        const cn = data.chat_node || null;
+        const sched = data.scheduling || null;
+        const candId = S.candidateId;
+        // stages definidos pela coordenação que o candidato precisa de receber
+        const coordStages = ['formalizacao', 'ativo', 'rejeitado'];
+        const stageSync = data.stage && coordStages.includes(data.stage) ? data.stage : null;
+        if (msgs || cn || sched || stageSync) {
+          setS((p) => ({
+            ...p,
+            ...(msgs ? { messages: msgs } : {}),
+            ...(sched && candId ? { scheduling: { ...p.scheduling, [candId]: sched } } : {}),
+            ...(stageSync && stageSync !== p.stage ? { stage: stageSync } : {}),
+            chat: cn ? { ...p.chat, node: cn, restoreInteraction: !!(msgs && msgs.length > 0) } : p.chat,
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        chatLoadedFor.current = S.candidateId;
+        setChatLoaded(true);
+      });
+  }, [S.candidateId, candidateJwt]);
 
   // Polling do agendamento — candidato busca o seu registo para detectar proposta da coordenação
   useEffectA(() => {
@@ -102,11 +155,24 @@ function App() {
       })
         .then((r) => r.json())
         .then((data) => {
-          if (!data || !data.scheduling) return;
+          if (!data) return;
           setS((p) => {
-            const cur = p.scheduling[p.candidateId];
-            if (JSON.stringify(cur) === JSON.stringify(data.scheduling)) return p;
-            return { ...p, scheduling: { ...p.scheduling, [p.candidateId]: data.scheduling } };
+            let next = p;
+            if (data.scheduling) {
+              const cur = p.scheduling[p.candidateId];
+              if (JSON.stringify(cur) !== JSON.stringify(data.scheduling)) {
+                // não sobrescrever uma aceitação local com dados antigos do Supabase
+                if (!(cur && cur.chosen != null && data.scheduling.chosen == null)) {
+                  next = { ...next, scheduling: { ...next.scheduling, [p.candidateId]: data.scheduling } };
+                }
+              }
+            }
+            // sincroniza stages definidos pela coordenação
+            const coordStages = ['formalizacao', 'ativo', 'rejeitado'];
+            if (data.stage && coordStages.includes(data.stage) && data.stage !== p.stage) {
+              next = { ...next, stage: data.stage };
+            }
+            return next;
           });
         })
         .catch(() => {});
@@ -135,7 +201,7 @@ function App() {
       fetch('http://localhost:3001/api/candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null, cc: S.candidate.cc || null, profissao: S.candidate.profissao || null, password: S.account.password }),
+        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null, cc: S.candidate.cc || null, profissao: S.candidate.profissao || null, nif: S.candidate.nif || null, rua: S.candidate.rua || null, porta: S.candidate.porta || null, codigo_postal: S.candidate.codigo_postal || null, cidade: S.candidate.cidade || null, password: S.account.password }),
       })
         .then((r) => r.json())
         .then(async (data) => {
@@ -285,7 +351,7 @@ function App() {
       const perData = window.PEDAL && window.PEDAL.PERIODS;
       const rawPeriods = c.periods ? c.periods.split(', ').filter(Boolean) : [];
       const periods = rawPeriods.map((p) => { const f = perData && perData.find((x) => x.name === p); return f ? f.id : p; });
-      return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', cc: c.cc || '', profissao: c.profissao || '', nif: c.nif || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods, availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '', scheduling: c.scheduling || null, interview: c.interview || null };
+      return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', cc: c.cc || '', profissao: c.profissao || '', nif: c.nif || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods, availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '', scheduling: c.scheduling || null, interview: c.interview || null, chat_messages: Array.isArray(c.chat_messages) ? c.chat_messages : null, rua: c.rua || '', porta: c.porta || '', codigo_postal: c.codigo_postal || '', cidade: c.cidade || '' };
     };
     const loadCandidates = () => {
       fetch('http://localhost:3001/api/candidates', { headers: { 'Authorization': `Bearer ${coordJwt}` } })
@@ -294,7 +360,7 @@ function App() {
         .catch(() => {});
     };
     loadCandidates();
-    const pollTimer = setInterval(loadCandidates, 20000);
+    const pollTimer = setInterval(loadCandidates, 5000);
     return () => clearInterval(pollTimer);
   }, [coordJwt]);
 
@@ -419,7 +485,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, addLocality, removeLocality, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, addNeed, updateNeed, removeNeed, addLocality, removeLocality, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

@@ -85,9 +85,22 @@ function Dashboard({ store }) {
     if (isLiveCandidate(c)) { store.up({ validated: true }); store.setStage('onboarding'); }
     else { store.setOverride(c.id, 'onboarding'); }
     store.patchRealCandidate(c.id, { stage: 'onboarding' });
+    if (!isLiveCandidate(c) && store.coordJwt) {
+      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ stage: 'onboarding' }),
+      }).catch(() => {});
+    }
     store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
   }
-  const schedOf = (c) => c.scheduling || S.scheduling[c.id] || null;
+  const schedOf = (c) => {
+    const local = S.scheduling[c.id] || null;
+    const api = c.scheduling || null;
+    // se o local já tem chosen (candidato aceitou na mesma sessão), tem prioridade
+    if (local && local.chosen != null) return { ...(api || {}), ...local };
+    return api || local || null;
+  };
 
   const cEspera = candidates.filter((c) => c.stage === 'espera').length;
   const cPratica = candidates.filter((c) => c.stage === 'pratica').length;
@@ -497,6 +510,13 @@ function WaitingList({ ctx }) {
     if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
     else { store.setOverride(c.id, 'validacao'); }
     store.patchRealCandidate(c.id, { stage: 'validacao' });
+    if (!isLiveCandidate(c) && store.coordJwt) {
+      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ stage: 'validacao' }),
+      }).catch(() => {});
+    }
     store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
     setSel(null);
   };
@@ -1237,11 +1257,20 @@ function CandidateDetail({ c, store, onClose }) {
     : (c.interview || {});
   const ivLabels = { gdpr: 'RGPD', conhecimento: 'Como conheceu', voluntariado: 'Voluntariado', voluntariado_info: 'Exp. voluntariado', bicicleta: 'Bicicleta', carta: 'Carta de condução' };
   const age = c.dob ? Math.floor((Date.now() - new Date(c.dob).getTime()) / 3.15576e10) : null;
-  const transcript = isLiveC ? store.S.messages.filter((m) => m.text) : [];
+  const transcript = isLiveC
+    ? store.S.messages.filter((m) => m.text)
+    : Array.isArray(c.chat_messages) ? c.chat_messages.filter((m) => m.text) : [];
 
   function doReject() {
     if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); } else { store.setOverride(c.id, 'rejeitado'); }
     store.patchRealCandidate(c.id, { stage: 'rejeitado' });
+    if (!isLiveC && store.coordJwt) {
+      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ stage: 'rejeitado' }),
+      }).catch(() => {});
+    }
     store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
     onClose();
   }
@@ -1272,7 +1301,16 @@ function CandidateDetail({ c, store, onClose }) {
           ) : (
             <DetailItem label="Disponibilidade" value={(c.periods && c.periods.length) ? c.periods.map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') : '—'} />
           )}
-          {c.nif && <DetailItem label="NIF (seguro)" value={c.nif} />}
+          {c.nif && <DetailItem label="NIF" value={c.nif} />}
+          {(c.rua || c.porta || c.codigo_postal || c.cidade) && (
+            <div className="pedal-detailitem" style={{ gridColumn: '1 / -1' }}>
+              <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 3 }}>Morada</div>
+              <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>
+                {[c.rua, c.porta].filter(Boolean).join(', ')}
+                {(c.codigo_postal || c.cidade) && <span style={{ fontWeight: 500, color: 'var(--ink-soft)' }}>{' · '}{[c.codigo_postal, c.cidade].filter(Boolean).join(' ')}</span>}
+              </div>
+            </div>
+          )}
           <DetailItem label="No funil há" value={c.days === 0 ? 'hoje' : c.days + ' dias'} />
         </div>
 
@@ -1320,7 +1358,7 @@ function CandidateDetail({ c, store, onClose }) {
           </div>
         )}
 
-        {isLiveC && transcript.length > 0 && (
+        {transcript.length > 0 && (
           <div style={{ marginTop: 16 }}>
             <button className="pedal-taskbtn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowChat((v) => !v)}>
               <Icon name="chat" size={14} />{showChat ? 'Ocultar conversa' : 'Ver conversa com o agente'}

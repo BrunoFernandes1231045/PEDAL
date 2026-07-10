@@ -79,10 +79,7 @@ function FormalizationCard({ onConfirm }) {
   const F = window.PEDAL.FORMALIZATION;
   const [ok, setOk] = useStateF(false);
   const [sig, setSig] = useStateF(null);
-  const [nif, setNif] = useStateF('');
-  const nifDigits = nif.replace(/\D/g, '');
-  const nifOk = nifDigits.length === 9;
-  const ready = ok && !!sig && nifOk;
+  const ready = ok && !!sig;
   // Nota: a animação de entrada (cardIn) congela neste cartão quando é montado
   // ao recarregar já em "formalização" (fica preso em opacity:0). Como uma
   // animação "a correr" tem prioridade sobre o estilo inline, desativamo-la aqui
@@ -104,18 +101,9 @@ function FormalizationCard({ onConfirm }) {
         <span>Li e aceito os termos de compromisso do piloto voluntário.</span>
       </label>
       <div style={{ marginTop: 14 }}>
-        <div style={{ font: '700 12.5px var(--ui)', color: 'var(--ink)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="lock" size={14} color="var(--primary)" />NIF (para o seguro do voluntário)</div>
-        <input className="pedal-input" type="tel" inputMode="numeric" value={nif}
-          onChange={(e) => setNif(e.target.value.replace(/[^\d\s]/g, '').slice(0, 11))}
-          placeholder="NIF · 9 dígitos" />
-        <div style={{ font: '400 11.5px var(--ui)', color: nif && !nifOk ? 'var(--accent-deep)' : 'var(--ink-soft)', marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
-          <Icon name="shield" size={13} />{nif && !nifOk ? 'O NIF deve ter 9 dígitos.' : 'Pedimos o NIF só agora, para ativar o teu seguro de voluntário.'}
-        </div>
-      </div>
-      <div style={{ marginTop: 14 }}>
         <SignaturePad onChange={setSig} />
       </div>
-      <button className="pedal-btn primary" disabled={!ready} onClick={() => onConfirm(sig, nifDigits)}
+      <button className="pedal-btn primary" disabled={!ready} onClick={() => onConfirm(sig)}
         style={{ width: '100%', marginTop: 14, opacity: ready ? 1 : 0.45 }}>
         Confirmar e tornar-me piloto ativo 🚲
       </button>

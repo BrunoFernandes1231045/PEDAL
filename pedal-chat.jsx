@@ -143,10 +143,10 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'interview': return stepInteraction((S.chat && S.chat.interviewStep) || 0);
       case 'await_validation': return { type: 'note', text: '⏳ A aguardar a validação da coordenação… Recebes aviso aqui assim que a tua candidatura for aprovada.' };
       case 'role_profile': return { type: 'card:role' };
-      case 'goto_onboarding': return { type: 'quick', options: [{ label: 'Abrir a minha formação →', action: 'go_formacao', accent: 'fill' }, { label: 'Tenho uma dúvida', action: 'doubt' }] };
+      case 'goto_onboarding': return { type: 'quick', options: [{ label: 'Abrir a minha formação →', action: 'go_formacao', accent: 'fill' }] };
       case 'onboarding_done': return { type: 'quick', options: [{ label: 'Quando é a formação prática?', answer: 'A coordenação vai propor-te aqui datas possíveis, conforme a disponibilidade do coach na tua zona. Aparecem nesta conversa assim que estiverem prontas. 🗓️' }] };
       case 'schedule_practical': return { type: 'schedule' };
-      case 'practical_booked': return { type: 'quick', options: [{ label: 'Preciso de remarcar', action: 'reschedule' }, { label: 'Falar com a equipa', action: 'handoff' }] };
+      case 'practical_booked': return { type: 'quick', options: [{ label: 'Preciso de remarcar', action: 'reschedule' }] };
       case 'await_reschedule': return { type: 'note', text: '🗓️ A aguardar novas datas da coordenação… aparecem aqui assim que estiverem prontas.' };
       case 'formalize': return { type: 'card:formalize' };
       case 'active_home': return { type: 'activefaq' };
@@ -257,7 +257,15 @@ function ChatView({ store, tone = 'caloroso' }) {
     setInteraction({ type: 'card:doubt', coordOnly: !!(opts && opts.coordOnly), initial: initialQuestion && initialQuestion !== 'Pedido de contacto a partir da conversa.' && initialQuestion !== 'Pedido de contacto de um piloto ativo.' ? initialQuestion : '' });
   }
 
-  // tenta responder com a base de conhecimento; se não souber, re-abre a caixa pedindo confirmação para enviar à coordenação
+  function autoSubmitDoubt(question) {
+    const c = S.candidate;
+    const preview = question.length > 60 ? question.slice(0, 60) + '…' : question;
+    store.addContactRequest({ name: c.name || 'Voluntário', contact: c.contact || '', email: c.email || '', question, live: true });
+    notify({ type: 'contacto', text: `enviou uma dúvida ao agente: “${preview}”` });
+    addMessage({ from: 'system', text: '✓ Dúvida enviada à coordenação' });
+  }
+
+  // tenta responder com a base de conhecimento; se não souber, envia automaticamente à coordenação
   function tryAnswerDoubt(question) {
     const q = (question || '').trim(); if (!q) return;
     addMessage({ from: 'user', text: q });
@@ -265,26 +273,10 @@ function ChatView({ store, tone = 'caloroso' }) {
     const active = S.stage === 'ativo';
     const f = active ? (P.matchIn(P.ACTIVE_FAQ, q) || P.matchFAQ(q)) : P.matchFAQ(q);
     if (f) say([{ text: f.a }], () => setInteraction(interactionFor(node)));
-    else say([
-      { text: 'Não tenho uma resposta certa para isto — não te quero passar informação incompleta. 🙏' },
-    ], () => setInteraction({ type: 'card:doubt', initial: q, retry: true }));
-  }
-
-  // submissão da caixa de dúvida — regista o pedido na consola e confirma no chat
-  function submitDoubt({ question, contact }) {
-    const c = S.candidate;
-    addMessage({ from: 'user', text: question });
-    store.addContactRequest({
-      name: c.name || 'Voluntário',
-      contact: contact || c.contact || '',
-      email: c.email || '',
-      question,
-      live: true,
-    });
-    addMessage({ from: 'system', text: '✓ Dúvida enviada à consola da coordenação' });
-    const preview = question.length > 60 ? question.slice(0, 60) + '…' : question;
-    notify({ type: 'contacto', text: `enviou uma dúvida ao agente: “${preview}”` });
-    setInteraction({ type: 'card:doubt', sent: true });
+    else {
+      autoSubmitDoubt(q);
+      say([{ text: 'Não tenho uma resposta certa para isso — enviei a tua dúvida à equipa. Respondem-te aqui em breve. 🙏' }], () => setInteraction(interactionFor(node)));
+    }
   }
 
   // pedido de novas datas para a formação prática (antes ou depois de aceitar)
@@ -292,10 +284,11 @@ function ChatView({ store, tone = 'caloroso' }) {
     const c = S.candidate;
     addMessage({ from: 'user', text: fromBooked ? 'Preciso de remarcar a formação prática' : 'Nenhuma destas datas me serve' });
     store.setScheduling(activeSchedKey, { slots: [], chosen: null, rescheduleRequested: true });
-    if (S.candidateId && store.candidateJwt) {
+    const reschedJwt = store.candidateJwt || store.coordJwt;
+    if (S.candidateId && reschedJwt) {
       fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${reschedJwt}` },
         body: JSON.stringify({ scheduling: { slots: [], chosen: null, rescheduleRequested: true } }),
       }).catch(() => {});
     }
@@ -318,19 +311,23 @@ function ChatView({ store, tone = 'caloroso' }) {
     const active = S.stage === 'ativo';
     const f = active ? (P.matchIn(P.ACTIVE_FAQ, t) || P.matchFAQ(t)) : P.matchFAQ(t);
     if (f) say([{ text: f.a }], () => setInteraction(interactionFor(node)));
-    else say([
-      { text: 'Esta é uma pergunta que prefiro não responder por ti — para não te dar uma informação incompleta. 🙏' },
-      { text: 'Posso enviar a tua dúvida à coordenação. Confirma o texto e envio-a já — eles respondem-te aqui mesmo.' },
-    ], () => setInteraction({ type: 'card:doubt', initial: t, retry: true }));
+    else {
+      autoSubmitDoubt(t);
+      say([{ text: 'Não tenho uma resposta certa para isso — enviei a tua dúvida à equipa. Respondem-te aqui em breve. 🙏' }], () => setInteraction(interactionFor(node)));
+    }
   }
 
   // ── ciclo de vida ────────────────────────────────────────────
   useEffectC(() => {
+    return () => { clearTimeout(typingTimer.current); clearTimeout(valTimer.current); };
+  }, []);
+
+  useEffectC(() => {
+    if (!store.chatLoaded) return;
     if (S.messages.length === 0) enterNode('welcome');
     else setInteraction(interactionFor(node));
-    return () => { clearTimeout(typingTimer.current); clearTimeout(valTimer.current); };
     // eslint-disable-next-line
-  }, []);
+  }, [store.chatLoaded]);
 
   // login com sessão guardada: restaura a interação correcta após o componente já ter montado
   const restoreFlag = !!(S.chat && S.chat.restoreInteraction);
@@ -422,7 +419,7 @@ function ChatView({ store, tone = 'caloroso' }) {
   }, [S.messages.length, typing, interaction]);
 
   // ── render ───────────────────────────────────────────────────
-  const blocked = interaction && ['card:consent', 'card:role', 'card:handoff', 'card:doubt', 'form_profile', 'triage', 'interviewText', 'schedule', 'card:formalize'].includes(interaction.type);
+  const blocked = interaction && ['card:consent', 'card:role', 'form_profile', 'triage', 'interviewText', 'schedule', 'card:formalize'].includes(interaction.type);
 
   function renderMsg(m, idx) {
     if (m.from === 'system') return <div key={m.id || idx} className="pedal-sys"><Icon name="check" size={13} />{m.text}</div>;
@@ -514,8 +511,6 @@ function ChatView({ store, tone = 'caloroso' }) {
           ); })}
           <button className="pedal-chip-btn" onClick={() => { addMessage({ from: 'user', text: 'Abrir a minha formação' }); store.goTab('formacao'); }}
             style={{ border: '1.5px solid var(--primary)', background: 'var(--primary)', color: '#fff', fontWeight: 700 }}>Abrir a minha formação →</button>
-          <button className="pedal-chip-btn" onClick={() => goHandoff('', { coordOnly: true })}
-            style={{ border: '1.5px solid var(--accent)', background: 'var(--accent-soft)', color: 'var(--accent-deep)', fontWeight: 700 }}>Outra dúvida · enviar à coordenação</button>
         </div>
       );
     }
@@ -561,12 +556,15 @@ function ChatView({ store, tone = 'caloroso' }) {
       return <SchedulePicker slots={slots} station={station} onRequestNew={() => requestReschedule(false)} onPick={(idx) => {
         const s = slots[idx]; const label = `${P.fmtDate(s.date)} às ${s.time}`;
         addMessage({ from: 'user', text: label });
+        const updatedSched = { ...(liveSched || {}), chosen: idx, rescheduleRequested: false };
         store.setScheduling(activeSchedKey, { chosen: idx, rescheduleRequested: false });
-        if (S.candidateId && store.candidateJwt) {
+        if (S.candidateId) store.patchRealCandidate(S.candidateId, { scheduling: updatedSched });
+        const schedJwt = store.candidateJwt || store.coordJwt;
+        if (S.candidateId && schedJwt) {
           fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
-            body: JSON.stringify({ scheduling: { ...(liveSched || {}), chosen: idx, rescheduleRequested: false } }),
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${schedJwt}` },
+            body: JSON.stringify({ scheduling: updatedSched }),
           }).catch(() => {});
         }
         setStage('pratica');
@@ -583,17 +581,16 @@ function ChatView({ store, tone = 'caloroso' }) {
         say(lines, () => setInteraction(interactionFor('practical_booked')));
       }} />;
     }
-    if (it.type === 'card:formalize') return <FormalizationCard onConfirm={(sig, nif) => {
+    if (it.type === 'card:formalize') return <FormalizationCard onConfirm={(sig) => {
       store.up({ signature: sig, termsAccepted: true });
-      patchCandidate({ nif });
       if (S.candidateId && store.candidateJwt) {
         fetch(`http://localhost:3001/api/candidates/${S.candidateId}/formalize`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
-          body: JSON.stringify({ nif, signature: 'signed' }),
+          body: JSON.stringify({ nif: S.candidate.nif || '', signature: 'signed' }),
         }).catch(() => {});
       }
-      addMessage({ from: 'system', text: 'Termo de compromisso assinado · NIF recolhido · piloto ativado' });
+      addMessage({ from: 'system', text: 'Termo de compromisso assinado · piloto ativado' });
       notify({ type: 'ativo', text: 'assinou o termo de compromisso e é agora piloto voluntário ativo' });
       setStage('ativo');
       setInteraction(null);
@@ -610,7 +607,7 @@ function ChatView({ store, tone = 'caloroso' }) {
 
   return (
     <div className="pedal-screen">
-      <ChatHeader stageLabel={P.stageLabel(S.stage)} onHandoff={() => goHandoff('')} />
+      <ChatHeader stageLabel={P.stageLabel(S.stage)} />
       <div className="pedal-msgs" ref={scrollRef}>
         {S.messages.map(renderMsg)}
         {typing && <div className="pedal-row agent"><div className="pedal-av"><Avatar /></div><TypingDots /></div>}
@@ -621,7 +618,7 @@ function ChatView({ store, tone = 'caloroso' }) {
   );
 }
 
-function ChatHeader({ stageLabel, onHandoff }) {
+function ChatHeader({ stageLabel }) {
   return (
     <div className="pedal-chathead">
       <Avatar size={40} />
@@ -632,9 +629,6 @@ function ChatHeader({ stageLabel, onHandoff }) {
           <span style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>Assistente · {stageLabel}</span>
         </div>
       </div>
-      <button className="pedal-headbtn" onClick={onHandoff} title="Falar com a equipa">
-        <Icon name="phone" size={18} />
-      </button>
     </div>
   );
 }

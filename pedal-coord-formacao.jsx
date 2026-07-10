@@ -6,7 +6,7 @@ const { useState: useStateCF, useRef: useRefCF } = React;
 // ── Modal: confirmar conclusão ou rejeitar o piloto na formação prática ──
 function PracticalCompleteModal({ c, store, onClose }) {
   const P = window.PEDAL;
-  const sc = store.S.scheduling[c.id] || {};
+  const sc = c.scheduling || store.S.scheduling[c.id] || {};
   const slot = sc.chosen != null && sc.slots ? sc.slots[sc.chosen] : null;
   const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
   const [mode, setMode] = useStateCF(null); // 'confirm' | 'reject'
@@ -16,6 +16,14 @@ function PracticalCompleteModal({ c, store, onClose }) {
 
   const doConfirm = () => {
     moveStage('formalizacao');
+    store.patchRealCandidate(c.id, { stage: 'formalizacao' });
+    if (!c.live && store.coordJwt) {
+      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ stage: 'formalizacao' }),
+      }).catch(() => {});
+    }
     if (c.live) store.up({ rejection: null });
     store.notify({ type: 'concluido', who: c.name, text: `concluiu a formação prática${comment ? ' — ' + comment : ''} · aguarda formalização` });
     onClose();
@@ -23,6 +31,14 @@ function PracticalCompleteModal({ c, store, onClose }) {
   const doReject = () => {
     if (c.live) { store.setStage('rejeitado'); store.up({ rejection: { reason: comment } }); }
     else { store.setOverride(c.id, 'rejeitado'); }
+    store.patchRealCandidate(c.id, { stage: 'rejeitado' });
+    if (!c.live && store.coordJwt) {
+      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ stage: 'rejeitado' }),
+      }).catch(() => {});
+    }
     store.notify({ type: 'rejeitado', who: c.name, text: `não concluiu a formação prática${comment ? ' — ' + comment : ''}` });
     onClose();
   };

@@ -12,7 +12,7 @@ function genPassword() {
 
 // POST /api/candidates — público (inscrição)
 router.post('/', async (req, res) => {
-  const { name, email, dob, phone, cc, profissao, password: providedPassword } = req.body;
+  const { name, email, dob, phone, cc, profissao, nif, rua, porta, codigo_postal, cidade, password: providedPassword } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name e email são obrigatórios' });
 
   const initialPassword = providedPassword || genPassword();
@@ -29,7 +29,7 @@ router.post('/', async (req, res) => {
 
   const { data, error } = await supabase
     .from('candidates')
-    .insert({ name, email, dob, phone, cc: cc || null, profissao: profissao || null, stage: 'inscricao', user_id: authData.user.id })
+    .insert({ name, email, dob, phone, cc: cc || null, profissao: profissao || null, nif: nif || null, rua: rua || null, porta: porta || null, codigo_postal: codigo_postal || null, cidade: cidade || null, stage: 'inscricao', user_id: authData.user.id })
     .select()
     .single();
 

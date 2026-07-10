@@ -55,15 +55,41 @@ function ConsentCard({ onAccept, onMore }) {
 }
 
 // Recolha de dados básicos (RF-06)
+const COUNTRIES = [
+  { code: 'PT', flag: '🇵🇹', label: 'Portugal', dialCode: '+351', placeholder: '9XX XXX XXX', maxDigits: 9, validate: (d) => d.length === 9 },
+  { code: 'BR', flag: '🇧🇷', label: 'Brasil',   dialCode: '+55',  placeholder: 'XX 9XXXX XXXX', maxDigits: 11, validate: (d) => d.length >= 10 && d.length <= 11 },
+];
+
 function ProfileForm({ onSubmit }) {
   const [name, setName] = useState('');
   const [dob, setDob] = useState('');
   const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('PT');
   const [email, setEmail] = useState('');
   const [cc, setCc] = useState('');
   const [profissao, setProfissao] = useState('');
+  const [nif, setNif] = useState('');
+  const [rua, setRua] = useState('');
+  const [porta, setPorta] = useState('');
+  const [codigoPostal, setCodigoPostal] = useState('');
+  const [cidade, setCidade] = useState('');
+
+  const ct = COUNTRIES.find((c) => c.code === country) || COUNTRIES[0];
+  const phoneDigits = phone.replace(/\D/g, '');
+  const phoneOk = ct.validate(phoneDigits);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const valid = name.trim().length > 1 && phone.trim().length > 6 && emailOk && dob && cc.trim().length >= 8 && profissao.trim().length > 1;
+  const nifDigits = nif.replace(/\D/g, '');
+  const nifOk = nifDigits.length === 9;
+  const cpOk = /^\d{4}-\d{3}$/.test(codigoPostal.trim());
+  const valid = name.trim().length > 1 && phoneOk && emailOk && dob && cc.trim().length >= 8 && profissao.trim().length > 1 && nifOk && rua.trim().length > 2 && porta.trim().length > 0 && cpOk && cidade.trim().length > 1;
+
+  const handleCp = (v) => {
+    const digits = v.replace(/\D/g, '').slice(0, 7);
+    setCodigoPostal(digits.length > 4 ? digits.slice(0, 4) + '-' + digits.slice(4) : digits);
+  };
+
+  const handleCountry = (code) => { setCountry(code); setPhone(''); };
+
   return (
     <div className="pedal-card">
       <Field label="Como te chamas?">
@@ -75,17 +101,49 @@ function ProfileForm({ onSubmit }) {
       <Field label="Número do Cartão de Cidadão">
         <input className="pedal-input" value={cc} onChange={(e) => setCc(e.target.value.replace(/[^\d]/g, '').slice(0, 8))} placeholder="XXXXXXXX" maxLength={8} />
       </Field>
+      <Field label="NIF">
+        <input className="pedal-input" type="tel" inputMode="numeric" value={nif} onChange={(e) => setNif(e.target.value.replace(/[^\d]/g, '').slice(0, 9))} placeholder="9 dígitos" maxLength={9} />
+        {nif && !nifOk && <div style={{ font: '400 11px var(--ui)', color: 'var(--accent-deep)', marginTop: 5 }}>O NIF deve ter 9 dígitos.</div>}
+      </Field>
       <Field label="Profissão">
         <input className="pedal-input" value={profissao} onChange={(e) => setProfissao(e.target.value)} placeholder="Ex.: Professor, Engenheiro, Reformado…" />
       </Field>
+      <Field label="Morada">
+        <input className="pedal-input" value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Rua / Avenida / Travessa…" />
+      </Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <Field label="Nº da porta">
+          <input className="pedal-input" value={porta} onChange={(e) => setPorta(e.target.value)} placeholder="Ex.: 12 3ºDto" />
+        </Field>
+        <Field label="Código postal">
+          <input className="pedal-input" type="tel" inputMode="numeric" value={codigoPostal} onChange={(e) => handleCp(e.target.value)} placeholder="XXXX-XXX" maxLength={8} />
+        </Field>
+      </div>
+      <Field label="Localidade">
+        <input className="pedal-input" value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade / Vila" />
+      </Field>
       <Field label="Telemóvel">
-        <input className="pedal-input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="9XX XXX XXX" />
+        <div style={{ display: 'flex', gap: 6, marginBottom: 7 }}>
+          {COUNTRIES.map((c) => (
+            <button key={c.code} type="button" onClick={() => handleCountry(c.code)}
+              style={{ flex: 1, padding: '7px 10px', borderRadius: 9, border: `2px solid ${country === c.code ? 'var(--primary)' : 'var(--line)'}`, background: country === c.code ? 'var(--primary-soft)' : 'var(--surface)', cursor: 'pointer', font: '600 12.5px var(--ui)', color: country === c.code ? 'var(--primary-deep)' : 'var(--ink-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all .13s' }}>
+              <span style={{ fontSize: 16 }}>{c.flag}</span>{c.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ font: '600 13px var(--ui)', color: 'var(--ink-soft)', background: 'var(--app-bg)', border: '1.5px solid var(--line)', borderRadius: 9, padding: '8px 10px', whiteSpace: 'nowrap' }}>{ct.dialCode}</span>
+          <input className="pedal-input" style={{ flex: 1, margin: 0 }} type="tel" inputMode="numeric" value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/[^\d\s]/g, '').slice(0, ct.maxDigits + 2))}
+            placeholder={ct.placeholder} />
+        </div>
+        {phone && !phoneOk && <div style={{ font: '400 11px var(--ui)', color: 'var(--accent-deep)', marginTop: 5 }}>{ct.code === 'PT' ? 'Número português: 9 dígitos.' : 'Número brasileiro: 10-11 dígitos (com DDD).'}</div>}
       </Field>
       <Field label="Email">
         <input className="pedal-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.pt" />
         <div style={{ font: '400 11px var(--ui)', color: 'var(--ink-soft)', marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="lock" size={12} />Enviamos para aqui os teus dados de acesso à app.</div>
       </Field>
-      <button className="pedal-btn primary" disabled={!valid} onClick={() => onSubmit({ name: name.trim(), dob, cc: cc.trim(), profissao: profissao.trim(), contact: phone.trim(), email: email.trim() })}
+      <button className="pedal-btn primary" disabled={!valid} onClick={() => onSubmit({ name: name.trim(), dob, cc: cc.trim(), nif: nifDigits, profissao: profissao.trim(), rua: rua.trim(), porta: porta.trim(), codigo_postal: codigoPostal.trim(), cidade: cidade.trim(), contact: ct.dialCode + phoneDigits, email: email.trim() })}
         style={{ opacity: valid ? 1 : 0.45, width: '100%', marginTop: 4 }}>Continuar</button>
     </div>
   );
