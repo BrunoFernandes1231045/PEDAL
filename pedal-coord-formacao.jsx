@@ -57,7 +57,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
         </div>
 
         <div style={{ display: 'grid', gap: 7, marginTop: 16 }}>
-          <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Sessão</span><span style={{ fontWeight: 700, color: 'var(--ink)' }}>{slot ? `${P.fmtDate(slot.date)} · ${slot.time}` : 'sem horário confirmado'}</span></div>
+          <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Sessão</span><span style={{ fontWeight: 700, color: 'var(--ink)' }}>{slot ? `${P.fmtDate(slot.date)} · ${slot.startTime || slot.time || ''}${slot.endTime ? `–${slot.endTime}` : ''}` : 'sem horário confirmado'}</span></div>
           <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Coach</span><span style={{ fontWeight: 700, color: trainer ? 'var(--ink)' : 'var(--accent-deep)' }}>{trainer ? trainer.name : 'por atribuir'}</span></div>
         </div>
 

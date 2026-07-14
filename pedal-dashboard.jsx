@@ -366,7 +366,7 @@ function NotificationsMenu({ notifs, onClose }) {
 }
 
 function OverviewSection({ ctx }) {
-  const { store, candidates, setSel, setSchedFor, setCompleteFor, schedOf, setSection } = ctx;
+  const { store, candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, schedOf, setSection } = ctx;
   const S = store.S; const P = window.PEDAL;
   const inFunnel = candidates.filter((c) => P.funnelCol(c.stage));
   const metrics = [
