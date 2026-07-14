@@ -1271,7 +1271,7 @@ function SchedulingModal({ c, store, onClose }) {
           </select>
         )}
 
-        <button className=”pedal-btn primary” disabled={!canSubmit} style={{ width: '100%', marginTop: 18, opacity: canSubmit ? 1 : 0.45 }} onClick={confirm}>
+        <button className="pedal-btn primary" disabled={!canSubmit} style={{ width: '100%', marginTop: 18, opacity: canSubmit ? 1 : 0.45 }} onClick={confirm}>
           {`Enviar ao voluntário${valid.length ? ` (${valid.length} alternativa${valid.length > 1 ? 's' : ''})` : ''}`}
         </button>
         {!canSubmit && (
