@@ -88,9 +88,23 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'interview': return [{ text: 'Vou fazer-te algumas perguntas para a coordenação te conhecer. 🙌' }, { text: INTERVIEW[0].q }];
       case 'await_validation': return [{ text: 'Obrigado pela partilha! 🙏 A coordenação vai rever a tua candidatura — normalmente em 1 a 2 dias.' }];
       case 'role_profile': return [{ text: 'Antes da formação, conhece o perfil do piloto e o nosso compromisso mútuo.' }];
-      case 'goto_onboarding': return [{ text: 'Tudo a postos! 🎓 Preparei a tua formação: 6 módulos curtos. Podes voltar a qualquer vídeo quando quiseres, sem perder o progresso.' }];
+      case 'goto_onboarding': return [{ text: `Tudo a postos! 🎓 Preparei a tua formação: ${P.MODULES.length} módulos curtos. Podes voltar a qualquer vídeo quando quiseres, sem perder o progresso.` }];
       case 'onboarding_done': return [{ text: '🎓 Concluíste o onboarding! A coordenação foi notificada com o teu progresso.' }, { text: 'O próximo passo é a formação prática com um coach de território, na tua zona — a coordenação vai propor-te horários por aqui. 🗓️' }];
-      case 'schedule_practical': return [{ text: 'A coordenação propôs horários para a tua formação prática com o coach. 🗓️ Escolhe o que te der mais jeito:' }];
+      case 'schedule_practical': return [{ text: 'A coordenação propôs horários para a tua formação prática. 🗓️' }, { text: 'A formação prática acontece sempre em grupo — precisamos de pelo menos dois participantes no mesmo horário. Seleciona os horários que te dão jeito (podes escolher mais do que um).' }];
+      case 'practical_awaiting_coord': return [{ text: 'Recebemos as tuas disponibilidades! 🙌' }, { text: 'Assim que a coordenação conseguir organizar um grupo para um dos teus horários, recebes a confirmação aqui. Pode levar alguns dias. 🗓️' }];
+      case 'practical_confirmed': {
+        const sc = liveSched;
+        const confirmedSlot = sc && sc.slots ? sc.slots.find((s) => s.state === 'confirmado') : null;
+        if (!confirmedSlot) return [{ text: '🎉 A tua formação prática foi confirmada! Aguarda os detalhes da coordenação.' }];
+        const tr = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
+        const stn = sc.stationId ? (store.realStations || []).find((s) => s.id === sc.stationId) : null;
+        const timeStr = (confirmedSlot.startTime || confirmedSlot.time || '') + (confirmedSlot.endTime ? `–${confirmedSlot.endTime}` : '');
+        const details = [`📅 ${P.fmtDate(confirmedSlot.date)} · ${timeStr}`];
+        if (stn) details.push(`📍 ${stn.name}${stn.address ? ` — ${stn.address}` : ''}`);
+        if (tr) details.push(`🎓 Coach: ${tr.name}${tr.phone ? ` · ${tr.phone}` : ''}`);
+        return [{ text: '🎉 Boa notícia! A tua formação prática foi confirmada!' }, { text: details.join('\n') }, { text: 'No dia, o coach recebe-te no local. Sem pressa, até te sentires confiante. 🚲' }];
+      }
+      case 'practical_all_refused': return [{ text: '🙏 A coordenação não conseguiu confirmar nenhum dos teus horários.' }, { text: 'Em breve vão propor-te novas alternativas. Assim que chegarem, aparecem aqui. 🗓️' }];
       case 'practical_booked': return [{ text: `Combinado! ✅ Ficas com ${pickedSlotText()}. Enviei os detalhes à coordenação e ao coach da tua zona.` }, { text: 'No dia, és acompanhado(a) do início ao fim — sem pressa, até te sentires confiante. Até já! 🚲' }];
       case 'await_reschedule': return [{ text: 'Em breve a coordenação envia-te novas datas para a formação prática. 🗓️' }];
       case 'formalize': {
@@ -145,7 +159,10 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'role_profile': return { type: 'card:role' };
       case 'goto_onboarding': return { type: 'quick', options: [{ label: 'Abrir a minha formação →', action: 'go_formacao', accent: 'fill' }] };
       case 'onboarding_done': return { type: 'quick', options: [{ label: 'Quando é a formação prática?', answer: 'A coordenação vai propor-te aqui datas possíveis, conforme a disponibilidade do coach na tua zona. Aparecem nesta conversa assim que estiverem prontas. 🗓️' }] };
-      case 'schedule_practical': return { type: 'schedule' };
+      case 'schedule_practical': return { type: 'schedule_multi' };
+      case 'practical_awaiting_coord': return { type: 'note', text: '⏳ A aguardar confirmação da coordenação… recebes aviso aqui assim que estiver disponível.' };
+      case 'practical_confirmed': return { type: 'quick', options: [{ label: 'Preciso de remarcar', action: 'reschedule' }] };
+      case 'practical_all_refused': return { type: 'note', text: '🗓️ A aguardar novas alternativas da coordenação… aparecem aqui assim que estiverem prontas.' };
       case 'practical_booked': return { type: 'quick', options: [{ label: 'Preciso de remarcar', action: 'reschedule' }] };
       case 'await_reschedule': return { type: 'note', text: '🗓️ A aguardar novas datas da coordenação… aparecem aqui assim que estiverem prontas.' };
       case 'formalize': return { type: 'card:formalize' };
@@ -283,13 +300,14 @@ function ChatView({ store, tone = 'caloroso' }) {
   function requestReschedule(fromBooked) {
     const c = S.candidate;
     addMessage({ from: 'user', text: fromBooked ? 'Preciso de remarcar a formação prática' : 'Nenhuma destas datas me serve' });
-    store.setScheduling(activeSchedKey, { slots: [], chosen: null, rescheduleRequested: true });
+    const reschedData = { slots: [], chosen: null, status: null, rescheduleRequested: true };
+    store.setScheduling(activeSchedKey, reschedData);
     const reschedJwt = store.candidateJwt || store.coordJwt;
     if (S.candidateId && reschedJwt) {
       fetch(`/api/candidates/${S.candidateId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${reschedJwt}` },
-        body: JSON.stringify({ scheduling: { slots: [], chosen: null, rescheduleRequested: true } }),
+        body: JSON.stringify({ scheduling: reschedData }),
       }).catch(() => {});
     }
     setStage('pratica');
@@ -354,11 +372,41 @@ function ChatView({ store, tone = 'caloroso' }) {
   // determine which key actually holds the proposal (coordinator may have used 'live' before candidate was in backend)
   const activeSchedKey = (S.scheduling && S.scheduling[schedKey]) ? schedKey : 'live';
   const liveSched = (S.scheduling && S.scheduling[activeSchedKey]) || null;
-  const hasProposals = !!(liveSched && liveSched.slots && liveSched.slots.length && liveSched.chosen == null);
+  // new format: status === 'aguarda_candidato'; backward compat: slots exist, no status, no chosen
+  const hasProposals = !!(liveSched && liveSched.slots && liveSched.slots.length && (!liveSched.status || liveSched.status === 'aguarda_candidato') && liveSched.chosen == null);
   useEffectC(() => {
-    if (hasProposals && node !== 'schedule_practical' && node !== 'practical_booked') enterNode('schedule_practical');
+    if (hasProposals && node !== 'schedule_practical' && node !== 'practical_booked' && node !== 'practical_awaiting_coord') enterNode('schedule_practical');
     // eslint-disable-next-line
   }, [hasProposals]);
+
+  // coordinator confirmed or cancelled all slots
+  const schedStatus = liveSched && liveSched.status;
+  useEffectC(() => {
+    if (!schedStatus) return;
+    if (schedStatus === 'confirmado' && node !== 'practical_confirmed' && node !== 'practical_booked' && node !== 'formalize' && node !== 'active_home') enterNode('practical_confirmed');
+    else if (schedStatus === 'cancelado' && node !== 'practical_all_refused' && S.stage === 'pratica') enterNode('practical_all_refused');
+    // eslint-disable-next-line
+  }, [schedStatus]);
+
+  // coordinator left a notification (slot refused/cancelled message)
+  const unshownCount = liveSched && liveSched.chatNotify ? liveSched.chatNotify.filter((n) => !n.shown).length : 0;
+  useEffectC(() => {
+    if (!unshownCount) return;
+    const msgs = (liveSched.chatNotify || []).filter((n) => !n.shown);
+    say(msgs.map((n) => ({ text: n.text })), () => {
+      const updatedNotifs = (liveSched.chatNotify || []).map((n) => ({ ...n, shown: true }));
+      const updatedSched = { ...(liveSched || {}), chatNotify: updatedNotifs };
+      store.setScheduling(activeSchedKey, { chatNotify: updatedNotifs });
+      const schedJwt = store.candidateJwt || store.coordJwt;
+      if (S.candidateId && schedJwt) {
+        fetch(`/api/candidates/${S.candidateId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${schedJwt}` },
+          body: JSON.stringify({ scheduling: updatedSched }),
+        }).catch(() => {});
+      }
+    });
+    // eslint-disable-next-line
+  }, [unshownCount]);
 
   const allDone = P.MODULES.every((m) => S.onboarding.done[m.id]);
   useEffectC(() => {
@@ -419,7 +467,7 @@ function ChatView({ store, tone = 'caloroso' }) {
   }, [S.messages.length, typing, interaction]);
 
   // ── render ───────────────────────────────────────────────────
-  const blocked = interaction && ['card:consent', 'card:role', 'form_profile', 'triage', 'interviewText', 'schedule', 'card:formalize'].includes(interaction.type);
+  const blocked = interaction && ['card:consent', 'card:role', 'form_profile', 'triage', 'interviewText', 'schedule', 'schedule_multi', 'card:formalize'].includes(interaction.type);
 
   function renderMsg(m, idx) {
     if (m.from === 'system') return <div key={m.id || idx} className="pedal-sys"><Icon name="check" size={13} />{m.text}</div>;
@@ -549,6 +597,27 @@ function ChatView({ store, tone = 'caloroso' }) {
       onSubmit={submitDoubt}
       onBack={() => setInteraction(interactionFor(node))} />;
     if (it.type === 'interviewText') return <InterviewText q={it.q} onSubmit={(v) => answerInterview(it.q.id, v)} />;
+    if (it.type === 'schedule_multi') {
+      const slots = (liveSched && liveSched.slots) || [];
+      return <MultiSelectSchedulePicker slots={slots} onRequestNew={() => requestReschedule(false)} onConfirm={(selectedIndices) => {
+        const selectedSet = new Set(selectedIndices);
+        const label = `Disponível em ${selectedIndices.length} horário${selectedIndices.length > 1 ? 's' : ''}`;
+        addMessage({ from: 'user', text: label });
+        const updatedSched = { ...(liveSched || {}), slots: (liveSched.slots || []).map((s, i) => selectedSet.has(i) ? { ...s, state: 'selecionado' } : s), status: 'aguarda_coordenacao' };
+        store.setScheduling(activeSchedKey, { slots: updatedSched.slots, status: 'aguarda_coordenacao' });
+        if (S.candidateId) store.patchRealCandidate(S.candidateId, { scheduling: updatedSched });
+        const schedJwt = store.candidateJwt || store.coordJwt;
+        if (S.candidateId && schedJwt) {
+          fetch(`/api/candidates/${S.candidateId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${schedJwt}` }, body: JSON.stringify({ scheduling: updatedSched }) }).catch(() => {});
+        }
+        setStage('pratica');
+        notify({ type: 'agendado', text: `selecionou ${selectedIndices.length} horário${selectedIndices.length > 1 ? 's' : ''} para a formação prática — aguarda confirmação da coordenação` });
+        addMessage({ from: 'system', text: 'Disponibilidade enviada à coordenação' });
+        setInteraction(null);
+        setChat({ node: 'practical_awaiting_coord' });
+        say([{ text: 'Perfeito! 🙌 Enviámos os teus horários à coordenação.' }, { text: 'Assim que conseguirem organizar um grupo para um dos teus horários, recebes a confirmação aqui. Pode levar alguns dias. 🗓️' }], () => setInteraction(interactionFor('practical_awaiting_coord')));
+      }} />;
+    }
     if (it.type === 'schedule') {
       const slots = (liveSched && liveSched.slots) || [];
       const trainer = (liveSched && liveSched.trainerId) ? (store.realTrainers || []).find((t) => t.id === liveSched.trainerId) : null;
@@ -710,6 +779,75 @@ function SchedulePicker({ slots, station, onPick, onRequestNew }) {
         ))}
       </div>
       <button className="pedal-authlink" style={{ display: 'block', margin: '12px auto 0' }} onClick={() => onRequestNew && onRequestNew()}>Nenhuma destas me serve</button>
+    </div>
+  );
+}
+
+function MultiSelectSchedulePicker({ slots, onConfirm, onRequestNew }) {
+  const P = window.PEDAL;
+  const [selected, setSelected] = useStateC(new Set());
+  const [step, setStep] = useStateC('select');
+
+  const toggle = (i) => setSelected((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
+
+  if (step === 'confirm') {
+    const picks = slots.map((s, i) => ({ s, i })).filter(({ i }) => selected.has(i));
+    return (
+      <div className="pedal-card" style={{ width: '100%' }}>
+        <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)', marginBottom: 8 }}>
+          Confirmar {picks.length} horário{picks.length > 1 ? 's' : ''} selecionado{picks.length > 1 ? 's' : ''}?
+        </div>
+        <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+          {picks.map(({ s, i }) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', background: 'var(--primary-soft)', borderRadius: 10 }}>
+              <Icon name="check" size={14} color="var(--primary-deep)" />
+              <span style={{ font: '700 13px var(--ui)', color: 'var(--primary-deep)' }}>
+                {P.fmtDate(s.date)} · {s.startTime || s.time || ''}{s.endTime ? `–${s.endTime}` : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="pedal-empcard">
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <span style={{ color: 'var(--accent-deep)', flexShrink: 0, marginTop: 1 }}><Icon name="heart" size={16} /></span>
+            <p style={{ font: '500 12.5px/1.55 var(--ui)', color: 'var(--accent-deep)', margin: 0 }}>
+              A formação prática acontece sempre em grupo — precisamos de pelo menos mais um participante. A coordenação confirma assim que conseguir organizar. 💛
+            </p>
+          </div>
+        </div>
+        <button className="pedal-btn primary" style={{ width: '100%', marginTop: 12 }} onClick={() => onConfirm(Array.from(selected))}>Confirmar a minha disponibilidade</button>
+        <button className="pedal-btn ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => setStep('select')}>Rever a seleção</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pedal-card" style={{ width: '100%' }}>
+      <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', marginBottom: 2 }}>Horários propostos</div>
+      <div style={{ font: '400 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 12 }}>Toca nos horários que te dão jeito. Podes escolher mais do que um.</div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {slots.map((s, i) => {
+          const on = selected.has(i);
+          const timeStr = (s.startTime || s.time || '') + (s.endTime ? `–${s.endTime}` : '');
+          return (
+            <button key={i} className={'pedal-slotpick' + (on ? ' on' : '')} onClick={() => toggle(i)}
+              style={{ outline: on ? '2px solid var(--primary)' : undefined, background: on ? 'var(--primary-soft)' : undefined }}>
+              <span className="pedal-slotcal">
+                {on ? <Icon name="check" size={17} color="var(--primary)" /> : <Icon name="clock" size={17} color="var(--ink-soft)" />}
+              </span>
+              <span style={{ flex: 1, textAlign: 'left' }}>
+                <span style={{ display: 'block', font: '700 13.5px var(--ui)', color: on ? 'var(--primary-deep)' : 'var(--ink)' }}>{P.fmtDate(s.date)}</span>
+                <span style={{ display: 'block', font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>{timeStr}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <button className="pedal-btn primary" style={{ width: '100%', marginTop: 12, opacity: selected.size > 0 ? 1 : 0.4 }}
+        disabled={selected.size === 0} onClick={() => setStep('confirm')}>
+        Confirmar disponibilidade ({selected.size})
+      </button>
+      <button className="pedal-authlink" style={{ display: 'block', margin: '12px auto 0' }} onClick={onRequestNew}>Nenhum me serve — pedir outros</button>
     </div>
   );
 }
