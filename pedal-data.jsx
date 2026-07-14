@@ -29,14 +29,26 @@ PEDAL.SEED_NEEDS = [
 ];
 
 // Há vaga aberta para esta localidade + disponibilidade do candidato?
-PEDAL.needMatch = function (needs, localityName, periods) {
-  const nd = (needs || []).find((n) => (n.locality || '').toLowerCase() === (localityName || '').toLowerCase());
-  if (!nd) return false;
-  const open = (nd.periods || []).filter((p) => p !== 'flex');  // 'flex' não é um horário concreto
-  if (!open.length) return true;                    // zona aberta para qualquer disponibilidade
+// schedule: { [localityName]: { [day]: { period: 'manha'|'tarde'|'ambos', count: number } } }
+PEDAL.needMatch = function (schedule, localityName, periods) {
+  if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return false;
+  const locData = schedule[(localityName || '')];
+  if (!locData) return false;
+  const DAYS = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+  const covered = new Set();
+  let hasAnyDay = false;
+  for (const day of DAYS) {
+    const cell = locData[day];
+    if (!cell || !cell.period) continue;
+    hasAnyDay = true;
+    if (cell.period === 'manha' || cell.period === 'ambos') covered.add('manha');
+    if (cell.period === 'tarde'  || cell.period === 'ambos') covered.add('tarde');
+  }
+  if (!hasAnyDay) return false;
+  if (covered.has('manha') && covered.has('tarde')) return true;  // cobre todos os períodos
   const cand = periods || [];
-  if (!cand.length || cand.includes('flex')) return true;  // candidato sem preferência ou flexível
-  return open.some((p) => cand.includes(p));
+  if (!cand.length || cand.includes('flex')) return true;
+  return cand.some((p) => covered.has(p));
 };
 
 // ── Base de conhecimento / FAQ validada (RF-23 a RF-28) ──────────────
@@ -111,18 +123,12 @@ PEDAL.INTERVIEW = [
 
 // ── Onboarding / tutorial guiado (RF-15 a RF-20) ─────────────────────
 PEDAL.MODULES = [
-  { id: 'm1', title: 'Bem-vindo à Pedalar Sem Idade', type: 'Vídeo', dur: '3 min',
-    desc: 'A missão, a história e o impacto dos passeios. O coração do projeto.' },
-  { id: 'm2', title: 'Conhecer o triciclo elétrico', type: 'Vídeo', dur: '6 min',
-    desc: 'Componentes, bateria, travões e assistência elétrica, passo a passo.' },
-  { id: 'm3', title: 'Segurança e condução defensiva', type: 'Vídeo', dur: '5 min',
-    desc: 'Velocidade, travagem, curvas e como antecipar o trânsito com um passageiro.' },
-  { id: 'm4', title: 'Acolher e comunicar com o passageiro', type: 'Vídeo', dur: '4 min',
-    desc: 'Como receber, conversar e cuidar do bem-estar de quem levas a passear.' },
-  { id: 'm5', title: 'Checklist antes e depois do passeio', type: 'Guia', dur: '2 min',
-    desc: 'A rotina de verificação que garante passeios tranquilos.' },
-  { id: 'm6', title: 'Perfil e compromisso do piloto', type: 'Documento', dur: '3 min',
-    desc: 'O que esperamos de ti e o que podes esperar de nós. Requer aceitação.' },
+  { id: 'm1', title: 'Partida', type: 'Vídeo', dur: '',
+    desc: 'Primeira fase da formação.' },
+  { id: 'm2', title: 'Largada', type: 'Vídeo', dur: '',
+    desc: 'Segunda fase da formação.' },
+  { id: 'm3', title: 'Fugida', type: 'Vídeo', dur: '',
+    desc: 'Terceira fase da formação.' },
 ];
 
 // Perfil de função (RF-20)

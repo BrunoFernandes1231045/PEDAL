@@ -18,7 +18,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
     moveStage('formalizacao');
     store.patchRealCandidate(c.id, { stage: 'formalizacao' });
     if (!c.live && store.coordJwt) {
-      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+      fetch(`/api/candidates/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ stage: 'formalizacao' }),
@@ -33,7 +33,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
     else { store.setOverride(c.id, 'rejeitado'); }
     store.patchRealCandidate(c.id, { stage: 'rejeitado' });
     if (!c.live && store.coordJwt) {
-      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+      fetch(`/api/candidates/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ stage: 'rejeitado' }),
@@ -97,6 +97,46 @@ function PracticalCompleteModal({ c, store, onClose }) {
 }
 
 // ── Gestão de conteúdos de formação: vídeos e info do agente por fase ──
+function IntroVideoAdmin({ store }) {
+  const [url, setUrl] = useStateCF(store.introVideoUrl || '');
+  const [saved, setSaved] = useStateCF(false);
+  const [saving, setSaving] = useStateCF(false);
+  const [err, setErr] = useStateCF(null);
+
+  const handleSave = async () => {
+    setSaving(true); setErr(null);
+    const result = await store.saveIntroVideo(url.trim());
+    setSaving(false);
+    if (result && result.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+    else setErr((result && result.error) || 'Erro ao guardar');
+  };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ font: '700 11px var(--ui)', letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--ink-soft)', paddingBottom: 10, borderBottom: '2px solid var(--line)', marginBottom: 14 }}>
+        Apresentação do projecto
+      </div>
+      <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 10px' }}>
+        URL do vídeo (Vimeo ou YouTube) que aparece no chat de candidatos quando escolhem "Quero ser piloto".
+      </p>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          className="pedal-input"
+          style={{ flex: 1, height: 38, font: '500 13px var(--ui)' }}
+          placeholder="https://vimeo.com/123456789"
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setSaved(false); }}
+        />
+        <button className="pedal-btn primary" style={{ opacity: saving ? 0.6 : 1 }} disabled={saving} onClick={handleSave}>
+          {saving ? 'A gravar…' : 'Gravar'}
+        </button>
+      </div>
+      {saved && <div style={{ font: '600 12px var(--ui)', color: 'var(--accent-deep)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="check" size={13} color="var(--accent-deep)" />Vídeo guardado</div>}
+      {err && <div style={{ font: '600 12px var(--ui)', color: 'var(--primary-deep)', marginTop: 6 }}>{err}</div>}
+    </div>
+  );
+}
+
 function ModuleContentAdmin({ store }) {
   const P = window.PEDAL;
   const content = store.S.moduleContent || {};
@@ -105,6 +145,10 @@ function ModuleContentAdmin({ store }) {
     <div className="pedal-panel">
       <div className="pedal-panelhead">
         <span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Vídeos & conteúdos</span>
+      </div>
+      <IntroVideoAdmin store={store} />
+      <div style={{ font: '700 11px var(--ui)', letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--ink-soft)', paddingBottom: 10, borderBottom: '2px solid var(--line)', marginBottom: 14 }}>
+        Formação
       </div>
       <p style={{ font: '400 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 14px' }}>
         Carrega o vídeo de cada fase e escreve a informação que o PEDAL deve usar para responder às dúvidas dos voluntários durante a formação.
@@ -146,16 +190,18 @@ function ModuleContentRow({ module, index, content, store }) {
           <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
             {videos.map((u, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <a href={u} target="_blank" rel="noreferrer" className="pedal-videochip" style={{ flex: 1, minWidth: 0, textDecoration: 'none' }}><Icon name="play" size={13} color="var(--primary)" /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{short(u)}</span></a>
+                <a href={u} target="_blank" rel="noreferrer" className="pedal-videochip" style={{ flex: 1, minWidth: 0, textDecoration: 'none', wordBreak: 'break-all' }}><Icon name="play" size={13} color="var(--primary)" /><span>{u}</span></a>
                 <button className="pedal-authlink" style={{ color: 'var(--ink-soft)' }} onClick={() => rmVideo(i)}>Remover</button>
               </div>
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input className="pedal-input" style={{ flex: 1, minWidth: 0 }} value={vurl} placeholder="https://vimeo.com/…" onChange={(e) => setVurl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addVideo(); }} />
-          <button className="pedal-taskbtn primary" style={{ whiteSpace: 'nowrap', flexShrink: 0 }} onClick={addVideo}><Icon name="check" size={14} color="#fff" />Adicionar</button>
-        </div>
+        {videos.length === 0 && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="pedal-input" style={{ flex: 1, minWidth: 0 }} value={vurl} placeholder="https://vimeo.com/…" onChange={(e) => setVurl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addVideo(); }} />
+            <button className="pedal-taskbtn primary" style={{ whiteSpace: 'nowrap', flexShrink: 0 }} onClick={addVideo}><Icon name="check" size={14} color="#fff" />Adicionar</button>
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: 11 }}>

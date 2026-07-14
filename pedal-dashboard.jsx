@@ -1,6 +1,6 @@
 /* pedal-dashboard.jsx — painel da coordenação (RF-30 a RF-40) */
 
-const { useState: useStateD } = React;
+const { useState: useStateD, useEffect: useEffectD } = React;
 
 const NOTIF_META = {
   qualificado: { icon: 'user', tone: 'green', verb: 'Candidato qualificado' },
@@ -51,8 +51,8 @@ function AvailabilityGrid({ value, onChange, readOnly }) {
 function Dashboard({ store }) {
   const S = store.S; const P = window.PEDAL;
   const coordRole = store.coordRole || 'coordenacao';
-  const ROLE_TABS = { administracao: ['operacao', 'dashboards', 'gestao'], coordenacao: ['operacao', 'dashboards'] };
-  const ROLE_GESTAO = { administracao: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'localidades', 'export'] };
+  const ROLE_TABS = { administracao: ['operacao', 'dashboards', 'gestao'], coordenacao: ['operacao', 'dashboards', 'gestao'] };
+  const ROLE_GESTAO = { administracao: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'localidades'], coordenacao: ['necessidades', 'conteudos'] };
   const allowedTabs = ROLE_TABS[coordRole] || ROLE_TABS.coordenacao;
   const allowedGestao = ROLE_GESTAO[coordRole] || null;
   const readOnly = false;
@@ -86,7 +86,7 @@ function Dashboard({ store }) {
     else { store.setOverride(c.id, 'onboarding'); }
     store.patchRealCandidate(c.id, { stage: 'onboarding' });
     if (!isLiveCandidate(c) && store.coordJwt) {
-      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+      fetch(`/api/candidates/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ stage: 'onboarding' }),
@@ -135,6 +135,7 @@ function Dashboard({ store }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
+          <ExportMenu candidates={candidates} store={store} />
           <button className="pedal-bellbtn" onClick={() => setNotifOpen((o) => !o)} title="Notificações" aria-label="Notificações">
             <Icon name="bell" size={18} />
             {notifs.length > 0 && <span className="pedal-bellbadge">{notifs.length}</span>}
@@ -511,7 +512,7 @@ function WaitingList({ ctx }) {
     else { store.setOverride(c.id, 'validacao'); }
     store.patchRealCandidate(c.id, { stage: 'validacao' });
     if (!isLiveCandidate(c) && store.coordJwt) {
-      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+      fetch(`/api/candidates/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ stage: 'validacao' }),
@@ -891,11 +892,12 @@ function ExportMenu({ candidates, store }) {
   const [open, setOpen] = useStateD(false);
   const groups = [
     { id: 'todos', label: 'Todos os voluntários', rows: candidates },
+    { id: 'inscricao', label: 'Em processo de inscrição', rows: candidates.filter((c) => !['ativo', 'rejeitado'].includes(c.stage)) },
     { id: 'rejeitados', label: 'Candidatos rejeitados', rows: candidates.filter((c) => c.stage === 'rejeitado') },
   ];
   return (
     <div style={{ position: 'relative' }}>
-      <button className="pedal-exportbtn" onClick={() => setOpen((o) => !o)}><Icon name="doc" size={15} />Exportar Excel<Icon name="arrow" size={13} /></button>
+      <button className="pedal-exportbtn" onClick={() => setOpen((o) => !o)}><Icon name="doc" size={15} />Exportar base de dados<Icon name="arrow" size={13} /></button>
       {open && (
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
@@ -1149,7 +1151,7 @@ function SchedulingModal({ c, store, onClose }) {
     store.setScheduling(c.id, schedData);
     const backendId = c.live ? store.S.candidateId : c.id;
     if (backendId && store.coordJwt) {
-      fetch(`http://localhost:3001/api/candidates/${backendId}`, {
+      fetch(`/api/candidates/${backendId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ scheduling: schedData }),
@@ -1265,7 +1267,7 @@ function CandidateDetail({ c, store, onClose }) {
     if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); } else { store.setOverride(c.id, 'rejeitado'); }
     store.patchRealCandidate(c.id, { stage: 'rejeitado' });
     if (!isLiveC && store.coordJwt) {
-      fetch(`http://localhost:3001/api/candidates/${c.id}`, {
+      fetch(`/api/candidates/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ stage: 'rejeitado' }),
@@ -1436,7 +1438,6 @@ function GestaoScreen({ ctx }) {
     { id: 'localidades', label: 'Localidades', icon: 'pin' },
     { id: 'conteudos', label: 'Vídeos & conteúdos', icon: 'play' },
     { id: 'locais', label: 'Locais de encontro', icon: 'map' },
-    { id: 'export', label: 'Exportar base de dados', icon: 'doc' },
   ];
   const items = allowedGestao ? allItems.filter((it) => allowedGestao.includes(it.id)) : allItems;
   const [g, setG] = useStateD(items[0] ? items[0].id : 'users');
@@ -1454,7 +1455,6 @@ function GestaoScreen({ ctx }) {
         {g === 'conteudos' && <ModuleContentAdmin store={store} />}
         {g === 'locais' && <StationsAdmin store={store} />}
         {g === 'localidades' && <LocalidadesAdmin store={store} />}
-        {g === 'export' && <ExportAllPanel candidates={candidates} store={store} />}
       </div>
     </div>
   );
@@ -1476,7 +1476,7 @@ function GestaoUsers({ store }) {
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
 
   const loadUsers = () => {
-    fetch('http://localhost:3001/api/coord-users', {
+    fetch('/api/coord-users', {
       headers: { 'Authorization': `Bearer ${store.coordJwt}` },
     }).then((r) => r.json()).then((data) => { if (Array.isArray(data)) setUsers(data); }).catch(() => setUsers([]));
   };
@@ -1489,7 +1489,7 @@ function GestaoUsers({ store }) {
     if (!valid) return;
     setLoading(true); setErr('');
     try {
-      const res = await fetch('http://localhost:3001/api/coord-users', {
+      const res = await fetch('/api/coord-users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role }),
@@ -1509,7 +1509,7 @@ function GestaoUsers({ store }) {
     if (!editing) return;
     setEditLoading(true); setEditErr('');
     try {
-      const res = await fetch(`http://localhost:3001/api/coord-users/${encodeURIComponent(editing.email)}`, {
+      const res = await fetch(`/api/coord-users/${encodeURIComponent(editing.email)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
         body: JSON.stringify({ role: editRole }),
@@ -1524,7 +1524,7 @@ function GestaoUsers({ store }) {
 
   const deleteUser = async (u) => {
     try {
-      const res = await fetch(`http://localhost:3001/api/coord-users/${encodeURIComponent(u.email)}`, {
+      const res = await fetch(`/api/coord-users/${encodeURIComponent(u.email)}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${store.coordJwt}` },
       });
@@ -1640,76 +1640,108 @@ function GestaoUsers({ store }) {
   );
 }
 
-// Base de necessidades / vagas abertas (localidade + disponibilidades)
+const NEEDS_DAYS = [
+  { id: 'segunda', label: 'Segunda' }, { id: 'terca',   label: 'Terça'   },
+  { id: 'quarta',  label: 'Quarta'  }, { id: 'quinta',  label: 'Quinta'  },
+  { id: 'sexta',   label: 'Sexta'   }, { id: 'sabado',  label: 'Sábado'  },
+  { id: 'domingo', label: 'Domingo' },
+];
+
 function NeedsAdmin({ store }) {
-  const P = window.PEDAL;
-  const needs = store.realNeeds || [];
-  const [f, setF] = useStateD({ locality: '', periods: [] });
-  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
-  const togglePeriod = (id) => setF((p) => ({ ...p, periods: p.periods.includes(id) ? p.periods.filter((x) => x !== id) : [...p.periods, id] }));
-  const perName = (id) => (P.PERIODS.find((x) => x.id === id) || {}).name || id;
-  const locOptions = (() => {
-    const seen = [];
-    (store.realLocalities || P.LOCALITIES).forEach((l) => { if (!seen.includes(l.name)) seen.push(l.name); });
-    (store.realStations || []).forEach((s) => { if (s.locality && !seen.includes(s.locality)) seen.push(s.locality); });
-    needs.forEach((n) => { if (n.locality && !seen.includes(n.locality)) seen.push(n.locality); });
-    return seen;
-  })();
-  const dup = needs.some((n) => (n.locality || '').toLowerCase() === f.locality.trim().toLowerCase());
-  const valid = f.locality.trim().length > 1 && !dup;
-  const submit = () => { if (!valid) return; store.addNeed({ locality: f.locality.trim(), periods: f.periods }); setF({ locality: '', periods: [] }); };
+  const localities = store.realLocalities || window.PEDAL.LOCALITIES;
+  const [table, setTable] = useStateD(() => store.realNeeds || {});
+  const [saved, setSaved] = useStateD(false);
+  const [saving, setSaving] = useStateD(false);
+  const [saveError, setSaveError] = useStateD(null);
+
+  useEffectD(() => {
+    if (store.realNeeds !== null) setTable(store.realNeeds || {});
+  }, [store.realNeeds]);
+
+  const setCell = (locName, day, field, value) => {
+    setSaved(false);
+    setTable((prev) => {
+      const loc = { ...(prev[locName] || {}) };
+      const cell = { ...(loc[day] || {}) };
+      if (field === 'period') { cell.period = value || null; if (!value) cell.count = null; }
+      else { cell.count = value ? Number(value) : null; }
+      loc[day] = (!cell.period && !cell.count) ? null : cell;
+      return { ...prev, [locName]: loc };
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true); setSaveError(null);
+    const result = await store.saveNeedsSchedule(table);
+    setSaving(false);
+    if (result && result.ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } else {
+      setSaveError((result && result.error) || 'Erro ao guardar');
+      setTimeout(() => setSaveError(null), 5000);
+    }
+  };
+
   return (
-    <div className="pedal-dashgrid">
-      <div className="pedal-panel">
-        <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Necessidades abertas</span><Pill tone={needs.length ? 'green' : 'amber'}>{needs.length} zona{needs.length === 1 ? '' : 's'}</Pill></div>
-        <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 12px' }}>Define onde e em que disponibilidades há vagas abertas. Candidatos compatíveis avançam para entrevista; todos os outros entram automaticamente em <strong style={{ color: 'var(--ink)' }}>lista de espera</strong>.</p>
-        {needs.length === 0 ? (
-          <div className="pedal-taskempty"><Icon name="route" size={16} color="var(--ink-soft)" />Sem vagas abertas — tudo entra em lista de espera.</div>
-        ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {needs.map((n) => (
-              <div key={n.id} className="pedal-stationrow" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ color: 'var(--primary)', flexShrink: 0 }}><Icon name="pin" size={17} /></span>
-                  <div style={{ flex: 1, minWidth: 0, font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{n.locality}</div>
-                  <button className="pedal-iconbtn" title="Remover vaga" onClick={() => store.removeNeed(n.id)}>✕</button>
-                </div>
-                <div>
-                  <div style={{ font: '600 10.5px var(--ui)', letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 6 }}>Disponibilidades abertas</div>
-                  <div className="pedal-pickgrid">
-                    {P.PERIODS.filter((p) => p.id !== 'flex').map((p) => {
-                      const on = (n.periods || []).includes(p.id);
-                      return (
-                        <button key={p.id} className={'pedal-pick small' + (on ? ' on' : '')}
-                          onClick={() => store.updateNeed(n.id, { periods: on ? (n.periods || []).filter((x) => x !== p.id) : [...(n.periods || []), p.id] })}>{p.name}</button>
-                      );
-                    })}
-                  </div>
-                  {!(n.periods || []).filter((p) => p !== 'flex').length && <div style={{ font: '500 11px var(--ui)', color: 'var(--accent-deep)', marginTop: 6 }}>Aberta para qualquer disponibilidade.</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+    <div className="pedal-panel">
+      <div className="pedal-panelhead">
+        <span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Necessidades / vagas</span>
       </div>
-      <div className="pedal-panel">
-        <div className="pedal-panelhead"><span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Abrir nova vaga</span></div>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <FieldLite label="Localidade">
-            <select className="pedal-select" style={{ minWidth: 0, width: '100%' }} value={f.locality} onChange={(e) => set('locality', e.target.value)}>
-              <option value="">—</option>
-              {locOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </FieldLite>
-          <FieldLite label="Disponibilidades abertas">
-            <div className="pedal-pickgrid">
-              {P.PERIODS.filter((p) => p.id !== 'flex').map((p) => <button key={p.id} className={'pedal-pick small' + (f.periods.includes(p.id) ? ' on' : '')} onClick={() => togglePeriod(p.id)}>{p.name}</button>)}
-            </div>
-          </FieldLite>
-          {dup && <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>Já existe uma vaga para esta localidade.</div>}
-          <p style={{ font: '400 11px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: 0 }}>Sem disponibilidade escolhida, a zona fica aberta para <strong style={{ color: 'var(--ink)' }}>qualquer</strong> disponibilidade.</p>
-          <button className="pedal-btn primary" disabled={!valid} style={{ width: '100%', opacity: valid ? 1 : 0.45, marginTop: 2 }} onClick={submit}>Abrir vaga</button>
-        </div>
+      <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 14px' }}>
+        Define para cada localidade e dia da semana o período e o número de pilotos necessários. Os candidatos são encaminhados automaticamente com base nesta tabela.
+      </p>
+      <div className="pedal-needs-wrap">
+        <table className="pedal-needs-tbl">
+          <thead>
+            <tr>
+              <th className="pedal-needs-loc-th">Localidade</th>
+              {NEEDS_DAYS.map((d) => <th key={d.id} className="pedal-needs-day-th">{d.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {localities.length === 0 ? (
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px', color: 'var(--ink-soft)', font: '500 13px var(--ui)' }}>Sem localidades configuradas — adiciona localidades na secção Localidades.</td></tr>
+            ) : localities.map((loc) => {
+              const locData = table[loc.name] || {};
+              return (
+                <tr key={loc.id || loc.name} className="pedal-needs-row">
+                  <td className="pedal-needs-loc-td">{loc.name}</td>
+                  {NEEDS_DAYS.map((d) => {
+                    const cell = locData[d.id] || {};
+                    return (
+                      <td key={d.id} className={'pedal-needs-cell' + (cell.period ? ' per-' + cell.period : '')}>
+                        <div className="pedal-needs-cell-inner">
+                          <div className="pedal-needs-per-wrap">
+                            <select className="pedal-needs-per" value={cell.period || ''} onChange={(e) => setCell(loc.name, d.id, 'period', e.target.value)}>
+                              <option value="">—</option>
+                              <option value="manha">Manhã</option>
+                              <option value="tarde">Tarde</option>
+                              <option value="ambos">Ambos</option>
+                            </select>
+                          </div>
+                          {cell.period && (
+                            <div className="pedal-needs-cnt-wrap">
+                              <select className={'pedal-needs-cnt' + (cell.count ? ' has-val' : '')} value={cell.count || ''} onChange={(e) => setCell(loc.name, d.id, 'count', e.target.value)}>
+                                <option value="">— pilotos</option>
+                                {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} piloto{n > 1 ? 's' : ''}</option>)}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 16 }}>
+        {saved && <span style={{ font: '600 13px var(--ui)', color: 'var(--accent-deep)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="check" size={14} color="var(--accent-deep)" />Alterações gravadas</span>}
+        {saveError && <span style={{ font: '600 13px var(--ui)', color: 'var(--primary-deep)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="alert-circle" size={14} color="var(--primary-deep)" />{saveError}</span>}
+        <button className="pedal-btn primary" style={{ opacity: saving ? 0.6 : 1 }} disabled={saving} onClick={handleSave}>{saving ? 'A gravar…' : 'Gravar alterações'}</button>
       </div>
     </div>
   );

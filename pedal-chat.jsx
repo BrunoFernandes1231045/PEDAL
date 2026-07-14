@@ -58,7 +58,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'faq': return [{ text: 'Pergunta à vontade! Toca num tema ou escreve a tua dúvida. 💬' }];
       case 'consent': return [{ text: 'Perfeito! Vamos tratar da tua inscrição. 📝' }];
       case 'collect': return [{ text: 'Primeiro, fico a conhecer-te.' }];
-      case 'triage': return [{ text: `Prazer, ${first || 'bem-vindo'}! 🙌 Agora diz-me onde e quando gostarias de pedalar.` }];
+      case 'triage': return [{ text: `Prazer, ${first || 'bem-vindo'}! 🙌 Agora diz-me onde e quando gostarias de pedalar.` }, { text: 'Os passeios decorrem normalmente de manhã entre as 10h e as 12h, ou de tarde entre as 14h e as 17h. Tens isso em conta ao preencher a disponibilidade. 🕐' }];
       case 'triage_result': {
         const r = triageResultRef.current || {};
         const open = r.open || [];
@@ -241,7 +241,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       addMessage({ from: 'system', text: '✓ Entrevista concluída — dados enviados à coordenação' });
       notify({ type: 'entrevista', text: 'concluiu a entrevista — aguarda validação' });
       if (S.candidateId && store.candidateJwt) {
-        fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+        fetch(`/api/candidates/${S.candidateId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
           body: JSON.stringify({ interview: answers }),
@@ -286,7 +286,7 @@ function ChatView({ store, tone = 'caloroso' }) {
     store.setScheduling(activeSchedKey, { slots: [], chosen: null, rescheduleRequested: true });
     const reschedJwt = store.candidateJwt || store.coordJwt;
     if (S.candidateId && reschedJwt) {
-      fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+      fetch(`/api/candidates/${S.candidateId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${reschedJwt}` },
         body: JSON.stringify({ scheduling: { slots: [], chosen: null, rescheduleRequested: true } }),
@@ -431,7 +431,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       return (
         <div key={m.id || idx} className="pedal-row agent">
           <div className="pedal-av">{!grouped && <Avatar />}</div>
-          <div style={{ flex: 1, maxWidth: '88%' }}><ProjectCard /></div>
+          <div style={{ flex: 1, maxWidth: '88%' }}><ProjectCard videoUrl={store.introVideoUrl} /></div>
         </div>
       );
     }
@@ -561,7 +561,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         if (S.candidateId) store.patchRealCandidate(S.candidateId, { scheduling: updatedSched });
         const schedJwt = store.candidateJwt || store.coordJwt;
         if (S.candidateId && schedJwt) {
-          fetch(`http://localhost:3001/api/candidates/${S.candidateId}`, {
+          fetch(`/api/candidates/${S.candidateId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${schedJwt}` },
             body: JSON.stringify({ scheduling: updatedSched }),
@@ -584,7 +584,7 @@ function ChatView({ store, tone = 'caloroso' }) {
     if (it.type === 'card:formalize') return <FormalizationCard onConfirm={(sig) => {
       store.up({ signature: sig, termsAccepted: true });
       if (S.candidateId && store.candidateJwt) {
-        fetch(`http://localhost:3001/api/candidates/${S.candidateId}/formalize`, {
+        fetch(`/api/candidates/${S.candidateId}/formalize`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
           body: JSON.stringify({ nif: S.candidate.nif || '', signature: 'signed' }),

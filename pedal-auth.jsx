@@ -31,7 +31,7 @@ function AuthGate({ store }) {
         return;
       }
 
-      const meRes = await fetch('http://localhost:3001/api/candidates/me', {
+      const meRes = await fetch('/api/candidates/me', {
         headers: { 'Authorization': `Bearer ${jwt}` },
       });
       if (!meRes.ok) { setErr('Conta encontrada, mas sem perfil de candidato associado.'); return; }
@@ -160,7 +160,7 @@ function LoginPanel({ store }) {
       }
 
       // Candidato: vai buscar o perfil ao backend
-      const meRes = await fetch('http://localhost:3001/api/candidates/me', {
+      const meRes = await fetch('/api/candidates/me', {
         headers: { 'Authorization': `Bearer ${jwt}` },
       });
       if (!meRes.ok) { setErr('Conta encontrada, mas sem perfil de candidato associado.'); return; }

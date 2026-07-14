@@ -11,6 +11,7 @@ const contactRequestsRouter = require('./routes/contactRequests');
 const dashboardRouter = require('./routes/dashboard');
 const coordUsersRouter = require('./routes/coordUsers');
 const localitiesRouter = require('./routes/localities');
+const settingsRouter = require('./routes/settings');
 
 const app = express();
 app.use(cors());
@@ -28,5 +29,6 @@ app.use('/api/contact-requests', contactRequestsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/coord-users', coordUsersRouter);
 app.use('/api/localities', localitiesRouter);
+app.use('/api/settings', settingsRouter);
 
 module.exports = app;

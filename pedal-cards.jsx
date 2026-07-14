@@ -3,7 +3,17 @@
 const { useState } = React;
 
 // Apresentação do projeto (F2 / RF-03)
-function ProjectCard() {
+function getVideoEmbed(url) {
+  if (!url) return null;
+  const vimeo = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeo) return 'https://player.vimeo.com/video/' + vimeo[1] + '?autoplay=0&title=0&byline=0&portrait=0';
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+  if (yt) return 'https://www.youtube.com/embed/' + yt[1];
+  return null;
+}
+
+function ProjectCard({ videoUrl }) {
+  const embedUrl = getVideoEmbed(videoUrl);
   const facts = [
     { icon: 'route', t: 'Passeios em triciclo elétrico adaptado' },
     { icon: 'people', t: 'Para idosos e pessoas com mobilidade reduzida' },
@@ -11,7 +21,31 @@ function ProjectCard() {
   ];
   return (
     <div className="pedal-card">
-      <Placeholder label="foto · passeio com beneficiário" height={120} />
+      {embedUrl ? (
+        <div style={{ borderRadius: 14, overflow: 'hidden', background: '#000', aspectRatio: '16/9', width: '100%' }}>
+          <iframe src={embedUrl} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+        </div>
+      ) : (
+        <div style={{
+          height: 140, borderRadius: 14, width: '100%', position: 'relative',
+          background: 'repeating-linear-gradient(135deg, var(--ph-a) 0 11px, var(--ph-b) 11px 22px)',
+          border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%',
+            background: 'rgba(255,255,255,.9)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,.14)',
+          }}>
+            <span style={{ color: 'var(--primary)', display: 'flex', paddingLeft: 2 }}><Icon name="play" size={20} /></span>
+          </div>
+          <span style={{
+            position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
+            font: '600 9.5px ui-monospace,"SF Mono",Menlo,monospace',
+            letterSpacing: 0.5, color: 'var(--ink-soft)', textTransform: 'uppercase',
+            background: 'var(--app-bg)', padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap',
+          }}>vídeo · bem-vindo à pedalar sem idade</span>
+        </div>
+      )}
       <div style={{ font: '700 16px var(--display)', color: 'var(--ink)', marginTop: 12 }}>
         Levamos pessoas a passear — e a sorrir.
       </div>

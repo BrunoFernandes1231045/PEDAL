@@ -3,25 +3,22 @@ const router = express.Router();
 const supabase = require('../db/supabase');
 const { requireAuth, requireCoordinator } = require('../middleware/auth');
 
-const SETTINGS_KEY = 'needs_schedule';
-
-// Público — usado pelo chat do candidato para needMatch (sem auth)
-router.get('/', async (req, res) => {
+// GET /api/settings/:key — público (sem auth)
+router.get('/:key', async (req, res) => {
   const { data, error } = await supabase
     .from('org_settings')
     .select('value')
-    .eq('key', SETTINGS_KEY)
+    .eq('key', req.params.key)
     .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data ? data.value : {});
+  res.json(data ? data.value : null);
 });
 
-// Grava a tabela inteira de necessidades (só coordenadores)
-router.put('/', requireAuth, requireCoordinator, async (req, res) => {
-  const schedule = req.body;
+// PUT /api/settings/:key — só coordenadores
+router.put('/:key', requireAuth, requireCoordinator, async (req, res) => {
   const { data, error } = await supabase
     .from('org_settings')
-    .upsert({ key: SETTINGS_KEY, value: schedule, updated_at: new Date() }, { onConflict: 'key' })
+    .upsert({ key: req.params.key, value: req.body, updated_at: new Date() }, { onConflict: 'key' })
     .select('value')
     .single();
   if (error) return res.status(500).json({ error: error.message });

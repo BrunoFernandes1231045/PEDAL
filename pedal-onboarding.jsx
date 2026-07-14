@@ -1,10 +1,11 @@
 /* pedal-onboarding.jsx — aba Formação (tutorial guiado) e aba Processo (estado + histórico) */
 
-const { useState: useStateO } = React;
+const { useState: useStateO, useRef: useRefO } = React;
 
 function FormacaoView({ store }) {
   const S = store.S; const P = window.PEDAL;
   const [open, setOpen] = useStateO(null);
+  const iframeRef = useRefO(null);
   const done = S.onboarding.done || {};
   const unlocked = S.validated && S.onboarding.roleAccepted;
   const count = P.MODULES.filter((m) => done[m.id]).length;
@@ -32,16 +33,28 @@ function FormacaoView({ store }) {
     const content = (S.moduleContent || {})[m.id] || {};
     const vid = (content.videos && content.videos[0]) || content.video || null;
     const ytId = vid && (vid.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&\s]+)/) || vid.match(/(?:https?:\/\/)?youtu\.be\/([^?\s]+)/))?.[1];
-    const embedUrl = ytId ? `https://www.youtube.com/embed/${ytId}` : null;
+    const vimeoId = vid && vid.match(/vimeo\.com\/(\d+)/)?.[1];
+    const embedUrl = ytId ? `https://www.youtube.com/embed/${ytId}` : vimeoId ? `https://player.vimeo.com/video/${vimeoId}?autoplay=0&title=0&byline=0&portrait=0` : null;
+    const goFullscreen = () => {
+      const el = iframeRef.current;
+      if (!el) return;
+      (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen).call(el);
+    };
     return (
       <div className="pedal-screen">
         <TabHeader title={m.type} subtitle={m.dur} onBack={() => setOpen(null)} />
         <div className="pedal-tabbody">
           {embedUrl ? (
-            <div style={{ borderRadius: 16, overflow: 'hidden', background: '#000' }}>
-              <iframe src={embedUrl} style={{ width: '100%', height: 188, border: 'none', display: 'block' }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen />
+            <div>
+              <div style={{ borderRadius: 16, overflow: 'hidden', background: '#000' }}>
+                <iframe ref={iframeRef} src={embedUrl} style={{ width: '100%', height: 188, border: 'none', display: 'block' }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                  allowFullScreen />
+              </div>
+              <button onClick={goFullscreen} style={{ width: '100%', marginTop: 8, padding: '9px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', font: '600 13px var(--ui)', color: 'var(--ink-soft)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+                Ver em ecrã inteiro
+              </button>
             </div>
           ) : vid ? (
             <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => window.open(vid.startsWith('http') ? vid : 'https://' + vid, '_blank')}>
@@ -286,7 +299,7 @@ function ModuleQA({ module, content, store }) {
 function TabHeader({ title, subtitle, onBack }) {
   return (
     <div className="pedal-tabhead">
-      {onBack && <button className="pedal-headbtn" onClick={onBack} style={{ marginRight: 4 }}><Icon name="arrow" size={18} color="var(--ink)" /></button>}
+      {onBack && <button className="pedal-headbtn" onClick={onBack} style={{ marginRight: 4 }}><span style={{ display:'inline-flex', transform:'rotate(180deg)' }}><Icon name="arrow" size={18} color="var(--ink)" /></span></button>}
       <div>
         <div style={{ font: '800 21px var(--display)', color: 'var(--ink)', lineHeight: 1.1, letterSpacing: '-0.01em' }}>{title}</div>
         {subtitle && <div style={{ font: '500 12.5px var(--ui)', color: 'var(--ink-soft)', marginTop: 2 }}>{subtitle}</div>}
