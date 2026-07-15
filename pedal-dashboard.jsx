@@ -1260,12 +1260,14 @@ function SchedulingModal({ c, store, onClose }) {
         <div style={lbl}>Propõe até 3 alternativas</div>
         <div style={{ display: 'grid', gap: 9 }}>
           {rows.map((r, i) => (
-            <div key={i} className="pedal-slotedit" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <div key={i} className="pedal-slotedit">
               <span className="pedal-slotnum">{i + 1}</span>
-              <input className="pedal-input" type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} style={{ flex: '1 1 120px' }} />
-              <input className="pedal-input" type="time" value={r.startTime} onChange={(e) => setRow(i, { startTime: e.target.value })} style={{ flex: '1 1 80px' }} placeholder="início" />
-              <span style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)', alignSelf: 'center', flexShrink: 0 }}>até</span>
-              <input className="pedal-input" type="time" value={r.endTime} onChange={(e) => setRow(i, { endTime: e.target.value })} style={{ flex: '1 1 80px' }} placeholder="fim" />
+              <input className="pedal-input" type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input className="pedal-input" type="time" value={r.startTime} onChange={(e) => setRow(i, { startTime: e.target.value })} style={{ flex: 1 }} placeholder="início" />
+                <span style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)', flexShrink: 0 }}>até</span>
+                <input className="pedal-input" type="time" value={r.endTime} onChange={(e) => setRow(i, { endTime: e.target.value })} style={{ flex: 1 }} placeholder="fim" />
+              </div>
             </div>
           ))}
         </div>
