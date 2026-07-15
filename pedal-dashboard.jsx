@@ -382,15 +382,19 @@ function OverviewSection({ ctx }) {
   candidates.filter((c) => c.stage === 'validacao').forEach((c) => tasks.push({ key: 'val' + c.id, c, kind: 'validar', label: 'Validar candidatura', btn: 'Rever', act: () => setSel(c) }));
   candidates.filter((c) => c.stage === 'pratica').forEach((c) => {
     const sc = schedOf(c); const st = getSchedStatus(sc);
-    if (!st || st === 'aguarda_candidato' || st === 'cancelado') {
+    if (!st || st === 'aguarda_candidato') {
       const proposed = sc && sc.slots && sc.slots.length;
       tasks.push({ key: 'sch' + c.id, c, kind: 'agendar',
-        label: st === 'cancelado' ? 'Re-propor horários · sem confirmação possível' : proposed ? 'Horários propostos · aguarda resposta do candidato' : 'Propor horários da formação prática',
+        label: proposed ? 'Horários propostos · aguarda resposta do candidato' : 'Propor horários da formação prática',
         btn: proposed ? 'Editar' : 'Propor', act: () => setSchedFor(c) });
     } else if (st === 'aguarda_coordenacao') {
-      tasks.push({ key: 'rev' + c.id, c, kind: 'confirmar', label: 'Candidato indicou disponibilidade · confirmar ou recusar horários', btn: 'Rever', act: () => setSlotReviewFor(c) });
+      tasks.push({ key: 'rev' + c.id, c, kind: 'confirmar', label: 'Candidato escolheu um horário · confirmar ou recusar', btn: 'Rever', act: () => setSlotReviewFor(c) });
+    } else if (st === 'candidato_propoe') {
+      tasks.push({ key: 'rev' + c.id, c, kind: 'confirmar', label: 'Candidato propôs um horário alternativo · confirmar ou recusar', btn: 'Rever', act: () => setSlotReviewFor(c) });
+    } else if (st === 'aguarda_telefone') {
+      tasks.push({ key: 'tel' + c.id, c, kind: 'agendar', label: 'Horário recusado · ligar ao candidato e registar horário definitivo', btn: 'Registar', act: () => setSlotReviewFor(c) });
     } else if (st === 'confirmado') {
-      const confirmedSlot = sc.slots.find((s) => s.state === 'confirmado') || (sc.chosen != null ? sc.slots[sc.chosen] : null);
+      const confirmedSlot = sc.slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? sc.slots[sc.chosen] : null);
       if (confirmedSlot) tasks.push({ key: 'cmp' + c.id, c, kind: 'concluir', label: `Confirmar conclusão · ${P.fmtDate(confirmedSlot.date)}`, btn: 'Concluir', act: () => setCompleteFor(c) });
     }
   });
@@ -641,7 +645,8 @@ function AgendamentosSection({ ctx }) {
   const stationOf = (id) => (store.realStations || []).find((s) => s.id === id) || null;
   const list = candidates.filter((c) => c.stage === 'pratica');
   const toAgendar = list.filter((c) => { const st = getSchedStatus(schedOf(c)); return !st || st === 'aguarda_candidato' || st === 'cancelado'; });
-  const awaitingCoord = list.filter((c) => getSchedStatus(schedOf(c)) === 'aguarda_coordenacao');
+  const awaitingCoord = list.filter((c) => { const st = getSchedStatus(schedOf(c)); return st === 'aguarda_coordenacao' || st === 'candidato_propoe'; });
+  const aguardaTelefone = list.filter((c) => getSchedStatus(schedOf(c)) === 'aguarda_telefone');
   const agendados = list.filter((c) => getSchedStatus(schedOf(c)) === 'confirmado');
   const aFormalizar = candidates.filter((c) => c.stage === 'formalizacao');
 
@@ -715,20 +720,45 @@ function AgendamentosSection({ ctx }) {
           <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
             {awaitingCoord.map((c) => {
               const sc = schedOf(c);
-              const selCount = sc ? sc.slots.filter((s) => s.state === 'selecionado').length : 0;
+              const isProposal = sc && sc.status === 'candidato_propoe';
               return (
                 <div key={c.id} className="pedal-taskrow">
                   <button className="pedal-kav" onClick={() => setSel(c)} title="Ver perfil">{c.initials}</button>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>{c.name}{c.live && <span className="pedal-livedot" style={{ position: 'static', margin: 0 }} />}</div>
-                    <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>{selCount} horário{selCount !== 1 ? 's' : ''} selecionado{selCount !== 1 ? 's' : ''} · aguarda confirmação</div>
+                    <div style={{ font: '600 11.5px var(--ui)', color: 'var(--accent-deep)' }}>{isProposal ? 'Propôs um horário alternativo · aguarda confirmação' : 'Escolheu um horário · aguarda confirmação'}</div>
                   </div>
                   <button className="pedal-taskbtn primary" onClick={() => setSlotReviewFor(c)}>Rever</button>
                 </div>
               );
             })}
           </div>
-          <p className="pedal-tasknote">O voluntário indicou os horários que lhe servem. Confirma um (quando tiveres grupo) ou recusa com justificação.</p>
+          <p className="pedal-tasknote">O voluntário indicou o horário que lhe serve. Confirma ou recusa com justificação.</p>
+        </div>
+      )}
+
+      {/* Aguarda horário definitivo após recusa */}
+      {aguardaTelefone.length > 0 && (
+        <div className="pedal-panel pedal-taskpanel" style={{ marginBottom: 18 }}>
+          <div className="pedal-panelhead">
+            <span style={{ font: '700 14px var(--display)', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              A registar horário definitivo<span className="pedal-taskbadge">{aguardaTelefone.length}</span>
+            </span>
+            <Pill tone="amber">ligar ao candidato</Pill>
+          </div>
+          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+            {aguardaTelefone.map((c) => (
+              <div key={c.id} className="pedal-taskrow">
+                <button className="pedal-kav" onClick={() => setSel(c)} title="Ver perfil">{c.initials}</button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>{c.name}{c.live && <span className="pedal-livedot" style={{ position: 'static', margin: 0 }} />}</div>
+                  <div style={{ font: '600 11.5px var(--ui)', color: 'var(--warn-deep)' }}>Ligar ao candidato · registar horário definitivo</div>
+                </div>
+                <button className="pedal-taskbtn primary" onClick={() => setSlotReviewFor(c)}>Registar</button>
+              </div>
+            ))}
+          </div>
+          <p className="pedal-tasknote">O horário proposto foi recusado. Após contacto telefónico, regista o horário definitivo para que o voluntário receba a confirmação na app.</p>
         </div>
       )}
 
@@ -748,7 +778,7 @@ function AgendamentosSection({ ctx }) {
           <div style={{ display: 'grid', gap: 12 }}>
             {planning.map((c) => {
               const sc = schedOf(c);
-              const slot = sc.slots.find((s) => s.state === 'confirmado') || (sc.chosen != null ? sc.slots[sc.chosen] : null);
+              const slot = sc.slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? sc.slots[sc.chosen] : null);
               const tr = trainerOf(sc.trainerId);
               const stn = stationOf(sc.stationId);
               if (!slot) return null;
@@ -1295,18 +1325,24 @@ function SlotReviewModal({ c, store, onClose }) {
   const P = window.PEDAL;
   const sc = c.scheduling || store.S.scheduling[c.id] || {};
   const slots = sc.slots || [];
-  const selectedSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => s.state === 'selecionado');
-  const confirmedSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => s.state === 'confirmado');
+  const status = sc.status || '';
   const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
   const station = sc.stationId ? (store.realStations || []).find((s) => s.id === sc.stationId) : null;
 
-  const [refusing, setRefusing] = useStateD(null);
-  const [refuseReason, setRefuseReason] = useStateD('');
-  const [cancelling, setCancelling] = useStateD(null);
-  const [cancelReason, setCancelReason] = useStateD('');
-  const [doneAction, setDoneAction] = useStateD(null);
+  const reviewSlot = status === 'aguarda_coordenacao' ? slots.find((s) => s.state === 'selecionado')
+    : status === 'candidato_propoe' ? slots.find((s) => s.state === 'proposto_candidato')
+    : (status === 'confirmado' || sc.chosen != null) ? (slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? slots[sc.chosen] : null))
+    : null;
 
-  const fmtSlot = (s) => `${P.fmtDate(s.date)} · ${s.startTime || s.time || ''}${s.endTime ? `–${s.endTime}` : ''}`;
+  const [refusing, setRefusing] = useStateD(false);
+  const [refuseReason, setRefuseReason] = useStateD('');
+  const [doneAction, setDoneAction] = useStateD(null);
+  const [defDate, setDefDate] = useStateD('');
+  const [defTime, setDefTime] = useStateD('');
+  const [defTrainerId, setDefTrainerId] = useStateD(sc.trainerId || '');
+  const [defStationId, setDefStationId] = useStateD(sc.stationId || '');
+
+  const fmtSlot = (s) => `${P.fmtDate(s.date)} · ${s.startTime || s.time || ''}`;
 
   const patchSched = (newSc) => {
     store.setScheduling(c.id, newSc);
@@ -1320,51 +1356,53 @@ function SlotReviewModal({ c, store, onClose }) {
     }
   };
 
-  const confirmSlot = (idx) => {
-    const label = fmtSlot(slots[idx]);
-    const tr = trainer; const stn = station;
+  const confirmSlot = () => {
+    if (!reviewSlot) return;
+    const label = fmtSlot(reviewSlot);
     let msg = `✅ A tua formação prática foi confirmada para ${label}!`;
-    if (stn) msg += ` Encontram-se em ${stn.name}${stn.address ? ` — ${stn.address}` : ''}.`;
-    if (tr) msg += ` O teu coach é ${tr.name}${tr.phone ? ` (${tr.phone})` : ''}.`;
-    const newSlots = slots.map((s, i) => i === idx ? { ...s, state: 'confirmado' } : s);
+    if (station) msg += ` Encontram-se em ${station.name}${station.address ? ` — ${station.address}` : ''}.`;
+    if (trainer) msg += ` O teu coach é ${trainer.name}${trainer.phone ? ` (${trainer.phone})` : ''}.`;
+    const newSlots = slots.map((s) => s === reviewSlot ? { ...s, state: 'confirmado' } : s);
     const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text: msg, shown: false }];
     patchSched({ ...sc, slots: newSlots, status: 'confirmado', chatNotify: notifs });
     store.notify({ type: 'agendado', who: c.name, text: `formação prática confirmada — ${label}` });
     setDoneAction('confirmed');
   };
 
-  const refuseSlot = (idx) => {
-    if (!refuseReason.trim()) return;
-    const label = fmtSlot(slots[idx]);
-    const newSlots = slots.map((s, i) => i === idx ? { ...s, state: 'recusado', rejectionReason: refuseReason.trim() } : s);
-    const remaining = newSlots.filter((s) => s.state === 'selecionado');
-    const newStatus = remaining.length === 0 ? 'cancelado' : 'aguarda_coordenacao';
-    const text = remaining.length === 0
-      ? `Não foi possível confirmar nenhum dos teus horários. A coordenação vai propor-te novas alternativas em breve. 🙏`
-      : `O horário de ${label} foi recusado. Motivo: ${refuseReason.trim()}. Continuamos a analisar os outros horários que indicaste.`;
+  const refuseSlot = () => {
+    if (!refuseReason.trim() || !reviewSlot) return;
+    const label = fmtSlot(reviewSlot);
+    const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. A equipa Pedalar Sem Idade vai contactar-te por telefone para marcarem um horário definitivo.`;
+    const newSlots = slots.map((s) => s === reviewSlot ? { ...s, state: 'recusado', rejectionReason: refuseReason.trim() } : s);
     const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
-    patchSched({ ...sc, slots: newSlots, status: newStatus, chatNotify: notifs });
-    setRefusing(null); setRefuseReason(''); setDoneAction('refused');
+    patchSched({ ...sc, slots: newSlots, status: 'aguarda_telefone', chatNotify: notifs });
+    store.notify({ type: 'agendado', who: c.name, text: `horário recusado — a equipa deve contactar o voluntário por telefone` });
+    setRefusing(false); setRefuseReason(''); setDoneAction('refused');
   };
 
-  const cancelSlot = (idx) => {
-    if (!cancelReason.trim()) return;
-    const label = fmtSlot(slots[idx]);
-    const newSlots = slots.map((s, i) => i === idx ? { ...s, state: 'cancelado', cancelReason: cancelReason.trim() } : s);
-    const remaining = newSlots.filter((s) => s.state === 'selecionado');
-    const newStatus = remaining.length > 0 ? 'aguarda_coordenacao' : 'cancelado';
-    const text = remaining.length > 0
-      ? `O horário confirmado de ${label} foi cancelado. Motivo: ${cancelReason.trim()}. Continuamos a verificar os teus outros horários disponíveis. 🙏`
-      : `O horário confirmado de ${label} foi cancelado. Motivo: ${cancelReason.trim()}. A coordenação vai propor novas alternativas. 🙏`;
-    const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
-    patchSched({ ...sc, slots: newSlots, status: newStatus, chatNotify: notifs });
-    setCancelling(null); setCancelReason(''); setDoneAction('cancelled');
+  const setDefinitive = () => {
+    if (!defDate || !defTime || !defTrainerId || !defStationId) return;
+    const label = `${P.fmtDate(defDate)} · ${defTime}`;
+    const tr = (store.realTrainers || []).find((t) => t.id === defTrainerId);
+    const stn = (store.realStations || []).find((s) => s.id === defStationId);
+    let msg = `✅ A tua formação prática foi confirmada para ${label}!`;
+    if (stn) msg += ` Encontram-se em ${stn.name}${stn.address ? ` — ${stn.address}` : ''}.`;
+    if (tr) msg += ` O teu coach é ${tr.name}${tr.phone ? ` (${tr.phone})` : ''}.`;
+    const newSlot = { date: defDate, startTime: defTime, state: 'definitivo' };
+    const newSlots = [...slots, newSlot];
+    const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text: msg, shown: false }];
+    patchSched({ ...sc, slots: newSlots, status: 'confirmado', trainerId: defTrainerId, stationId: defStationId, chatNotify: notifs });
+    store.notify({ type: 'agendado', who: c.name, text: `horário definitivo registado — ${label}` });
+    setDoneAction('confirmed');
   };
 
   const lbl = { font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', margin: '16px 0 9px' };
 
   if (doneAction) {
-    const msgs = { confirmed: ['Horário confirmado!', 'O voluntário recebeu a confirmação na app com todos os detalhes.'], refused: ['Horário recusado', 'O voluntário foi notificado na app.'], cancelled: ['Horário cancelado', 'O voluntário foi notificado na app.'] };
+    const msgs = {
+      confirmed: ['Horário confirmado!', 'O voluntário recebeu a confirmação na app com todos os detalhes.'],
+      refused: ['Horário recusado', 'O voluntário foi notificado. A equipa Pedalar Sem Idade deverá contactá-lo por telefone para marcar um horário definitivo.'],
+    };
     const [title, msg] = msgs[doneAction];
     return (
       <div className="pedal-modal-wrap" onClick={onClose}>
@@ -1379,92 +1417,133 @@ function SlotReviewModal({ c, store, onClose }) {
     <div className="pedal-modal-wrap" onClick={onClose}>
       <div className="pedal-modal" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
         <button className="pedal-modalclose" onClick={onClose}>✕</button>
-        <div style={{ font: '800 19px var(--display)', color: 'var(--ink)' }}>Horários da formação prática</div>
+        <div style={{ font: '800 19px var(--display)', color: 'var(--ink)' }}>Formação prática</div>
         <div style={{ font: '500 13px var(--ui)', color: 'var(--ink-soft)', marginTop: 2 }}>{c.name} · {c.locality}</div>
 
-        {confirmedSlots.length > 0 && (
+        {/* Candidato escolheu um horário ou propôs um alternativo */}
+        {(status === 'aguarda_coordenacao' || status === 'candidato_propoe') && reviewSlot && (
           <>
-            <div style={lbl}>Horário confirmado</div>
-            {confirmedSlots.map(({ s, i }) => (
-              <div key={i} style={{ background: 'var(--primary-soft)', border: '1.5px solid var(--primary)', borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Icon name="check" size={16} color="var(--primary-deep)" />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ font: '700 13.5px var(--ui)', color: 'var(--primary-deep)' }}>{P.fmtDate(s.date)}</div>
-                    <div style={{ font: '500 12px var(--ui)', color: 'var(--primary-deep)', opacity: 0.8 }}>{s.startTime || s.time || ''}{s.endTime ? `–${s.endTime}` : ''}</div>
-                  </div>
-                  {cancelling !== i && <button className="pedal-taskbtn" style={{ color: 'var(--accent-deep)', borderColor: 'var(--accent)' }} onClick={() => { setCancelling(i); setCancelReason(''); }}>Cancelar horário</button>}
+            <div style={lbl}>{status === 'candidato_propoe' ? 'Horário proposto pelo voluntário' : 'Horário escolhido pelo voluntário'}</div>
+            <div style={{ border: '1.5px solid var(--line)', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Icon name="clock" size={16} color="var(--ink-soft)" />
+                <div style={{ flex: 1 }}>
+                  <div style={{ font: '700 14px var(--ui)', color: 'var(--ink)' }}>{P.fmtDate(reviewSlot.date)}</div>
+                  <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>{reviewSlot.startTime || reviewSlot.time || ''} · duração aprox. 2h</div>
                 </div>
-                {cancelling === i && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ font: '600 12px var(--ui)', color: 'var(--ink)', marginBottom: 6 }}>Motivo do cancelamento (obrigatório)</div>
-                    <textarea className="pedal-agentinfo" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Ex.: Mau tempo · formador indisponível · imprevisto do voluntário…" style={{ background: 'var(--surface)', minHeight: 64, fontSize: 12.5 }} autoFocus />
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                      <button className="pedal-taskbtn" onClick={() => { setCancelling(null); setCancelReason(''); }}>Cancelar</button>
-                      <button className="pedal-taskbtn primary" style={{ opacity: cancelReason.trim() ? 1 : 0.45 }} disabled={!cancelReason.trim()} onClick={() => cancelSlot(i)}>Confirmar cancelamento</button>
-                    </div>
-                  </div>
-                )}
               </div>
-            ))}
-          </>
-        )}
-
-        {selectedSlots.length > 0 && (
-          <>
-            <div style={lbl}>Horários selecionados pelo voluntário</div>
-            <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', marginTop: 0, marginBottom: 12 }}>Confirma quando conseguires organizar o grupo. Recusa com justificação se não for possível.</p>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {selectedSlots.map(({ s, i }) => (
-                <div key={i} style={{ border: '1.5px solid var(--line)', borderRadius: 12, padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Icon name="clock" size={16} color="var(--ink-soft)" />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>{P.fmtDate(s.date)}</div>
-                      <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>{s.startTime || s.time || ''}{s.endTime ? `–${s.endTime}` : ''}</div>
-                    </div>
-                    {refusing !== i && (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="pedal-taskbtn primary" onClick={() => confirmSlot(i)}>Confirmar</button>
-                        <button className="pedal-taskbtn" style={{ color: 'var(--accent-deep)', borderColor: 'var(--accent)' }} onClick={() => { setRefusing(i); setRefuseReason(''); }}>Recusar</button>
-                      </div>
-                    )}
-                  </div>
-                  {refusing === i && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ font: '600 12px var(--ui)', color: 'var(--ink)', marginBottom: 6 }}>Motivo da recusa (obrigatório)</div>
-                      <textarea className="pedal-agentinfo" value={refuseReason} onChange={(e) => setRefuseReason(e.target.value)} placeholder="Ex.: Sem grupo disponível · mau tempo · formador indisponível…" style={{ background: 'var(--surface)', minHeight: 64, fontSize: 12.5 }} autoFocus />
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                        <button className="pedal-taskbtn" onClick={() => { setRefusing(null); setRefuseReason(''); }}>Cancelar</button>
-                        <button className="pedal-taskbtn primary" style={{ opacity: refuseReason.trim() ? 1 : 0.45 }} disabled={!refuseReason.trim()} onClick={() => refuseSlot(i)}>Confirmar recusa</button>
-                      </div>
-                    </div>
-                  )}
+              {!refusing && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button className="pedal-btn primary" style={{ flex: 1 }} onClick={confirmSlot}>Confirmar</button>
+                  <button className="pedal-btn" style={{ flex: 1, color: 'var(--accent-deep)', borderColor: 'var(--accent)' }} onClick={() => setRefusing(true)}>Recusar</button>
                 </div>
-              ))}
+              )}
+              {refusing && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ font: '600 12px var(--ui)', color: 'var(--ink)', marginBottom: 6 }}>Motivo da recusa (obrigatório)</div>
+                  <textarea className="pedal-agentinfo" value={refuseReason} onChange={(e) => setRefuseReason(e.target.value)} placeholder="Ex.: Sem disponibilidade · coach indisponível…" style={{ background: 'var(--surface)', minHeight: 64, fontSize: 12.5 }} autoFocus />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                    <button className="pedal-taskbtn" onClick={() => { setRefusing(false); setRefuseReason(''); }}>Cancelar</button>
+                    <button className="pedal-taskbtn primary" style={{ opacity: refuseReason.trim() ? 1 : 0.45 }} disabled={!refuseReason.trim()} onClick={refuseSlot}>Confirmar recusa</button>
+                  </div>
+                </div>
+              )}
             </div>
+            {(trainer || station) && (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {trainer && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 11 }}>
+                  <Icon name="shield" size={15} color="var(--accent-deep)" />
+                  <div><div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{trainer.name}</div><div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>Coach{trainer.phone ? ` · ${trainer.phone}` : ''}</div></div>
+                </div>}
+                {station && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 11 }}>
+                  <Icon name="pin" size={15} color="var(--primary)" />
+                  <div><div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{station.name}</div>{station.address && <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{station.address}</div>}</div>
+                </div>}
+              </div>
+            )}
           </>
         )}
 
-        {selectedSlots.length === 0 && confirmedSlots.length === 0 && (
-          <div className="pedal-taskempty" style={{ marginTop: 16 }}><Icon name="clock" size={16} color="var(--ink-soft)" />Sem horários pendentes de revisão.</div>
+        {/* Aguarda horário definitivo após recusa */}
+        {status === 'aguarda_telefone' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 16, background: 'var(--warn-soft)', borderRadius: 11, padding: '11px 13px' }}>
+              <Icon name="shield" size={15} color="var(--warn-deep)" />
+              <div style={{ font: '500 12.5px/1.5 var(--ui)', color: 'var(--warn-deep)' }}>O horário proposto foi recusado. A equipa Pedalar Sem Idade deverá contactar o voluntário por telefone para marcarem um horário definitivo.</div>
+            </div>
+            <div style={lbl}>Horário definitivo</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="pedal-input" type="date" value={defDate} onChange={(e) => setDefDate(e.target.value)} style={{ flex: 2 }} />
+              <input className="pedal-input" type="time" value={defTime} onChange={(e) => setDefTime(e.target.value)} style={{ flex: 1 }} placeholder="hora início" />
+            </div>
+            <div style={lbl}>Formador (coach)</div>
+            {(store.realTrainers || []).length === 0 ? (
+              <div className="pedal-taskempty"><Icon name="people" size={16} color="var(--ink-soft)" />Sem formadores.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 7 }}>
+                {[...(store.realTrainers || [])].sort((a, b) => (a.locality === c.locality ? 0 : 1) - (b.locality === c.locality ? 0 : 1) || a.name.localeCompare(b.name)).map((t) => (
+                  <button key={t.id} className={'pedal-traineropt' + (defTrainerId === t.id ? ' on' : '')} onClick={() => setDefTrainerId(defTrainerId === t.id ? '' : t.id)}>
+                    <div className="pedal-traineravsm">{t.name.split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                      <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{t.name}</div>
+                      <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{t.locality || 'sem território'} · {t.phone}</div>
+                    </div>
+                    {t.locality === c.locality && defTrainerId !== t.id && <span className="pedal-trainertag">mesma zona</span>}
+                    {defTrainerId === t.id && <Icon name="check" size={17} color="var(--primary)" />}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={lbl}>Local de encontro</div>
+            {(store.realStations || []).length === 0 ? (
+              <div className="pedal-taskempty"><Icon name="pin" size={16} color="var(--ink-soft)" />Sem locais.</div>
+            ) : (
+              <select className="pedal-select" style={{ width: '100%' }} value={defStationId} onChange={(e) => setDefStationId(e.target.value)}>
+                <option value="">— escolher local —</option>
+                {[...(store.realStations || [])].sort((a, b) => (a.locality === c.locality ? 0 : 1) - (b.locality === c.locality ? 0 : 1)).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} · {s.locality}</option>
+                ))}
+              </select>
+            )}
+            <button className="pedal-btn primary" disabled={!defDate || !defTime || !defTrainerId || !defStationId}
+              style={{ width: '100%', marginTop: 18, opacity: (defDate && defTime && defTrainerId && defStationId) ? 1 : 0.45 }} onClick={setDefinitive}>
+              Registar horário definitivo
+            </button>
+            <p className="pedal-tasknote" style={{ marginTop: 10 }}>Após registar, o voluntário recebe a confirmação na app. Qualquer alteração posterior é feita por telefone.</p>
+          </>
         )}
 
-        {(trainer || station) && (
-          <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
-            {trainer && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 11 }}>
-                <Icon name="shield" size={15} color="var(--accent-deep)" />
-                <div><div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{trainer.name}</div><div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>Coach{trainer.phone ? ` · ${trainer.phone}` : ''}</div></div>
+        {/* Horário confirmado */}
+        {(status === 'confirmado' || (sc.chosen != null && !status)) && reviewSlot && (
+          <>
+            <div style={lbl}>Formação confirmada</div>
+            <div style={{ background: 'var(--primary-soft)', border: '1.5px solid var(--primary)', borderRadius: 12, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Icon name="check" size={16} color="var(--primary-deep)" />
+                <div style={{ flex: 1 }}>
+                  <div style={{ font: '700 13.5px var(--ui)', color: 'var(--primary-deep)' }}>{P.fmtDate(reviewSlot.date)}</div>
+                  <div style={{ font: '500 12px var(--ui)', color: 'var(--primary-deep)', opacity: 0.8 }}>{reviewSlot.startTime || reviewSlot.time || ''} · aprox. 2h</div>
+                </div>
+              </div>
+            </div>
+            {(trainer || station) && (
+              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                {trainer && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 11 }}>
+                  <Icon name="shield" size={15} color="var(--accent-deep)" />
+                  <div><div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{trainer.name}</div><div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>Coach{trainer.phone ? ` · ${trainer.phone}` : ''}</div></div>
+                </div>}
+                {station && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 11 }}>
+                  <Icon name="pin" size={15} color="var(--primary)" />
+                  <div><div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{station.name}</div>{station.address && <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{station.address}</div>}</div>
+                </div>}
               </div>
             )}
-            {station && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 11 }}>
-                <Icon name="pin" size={15} color="var(--primary)" />
-                <div><div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{station.name}</div>{station.address && <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{station.address}</div>}</div>
-              </div>
-            )}
-          </div>
+            <p className="pedal-tasknote" style={{ marginTop: 12 }}>Qualquer alteração de horário é feita por telefone com o voluntário.</p>
+          </>
+        )}
+
+        {!reviewSlot && status !== 'aguarda_telefone' && (
+          <div className="pedal-taskempty" style={{ marginTop: 16 }}><Icon name="clock" size={16} color="var(--ink-soft)" />Sem horários pendentes de revisão.</div>
         )}
       </div>
     </div>
