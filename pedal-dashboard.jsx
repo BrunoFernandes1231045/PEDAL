@@ -58,7 +58,7 @@ function getSchedStatus(sc) {
 function Dashboard({ store }) {
   const S = store.S; const P = window.PEDAL;
   const coordRole = store.coordRole || 'coordenacao';
-  const ROLE_TABS = { administracao: ['operacao', 'dashboards', 'gestao'], coordenacao: ['operacao', 'dashboards', 'gestao'] };
+  const ROLE_TABS = { administracao: ['operacao', 'dashboards', 'gestao'], coordenacao: ['operacao', 'dashboards'] };
   const ROLE_GESTAO = { administracao: ['users', 'formadores', 'necessidades', 'conteudos', 'locais', 'localidades'], coordenacao: ['necessidades', 'conteudos'] };
   const allowedTabs = ROLE_TABS[coordRole] || ROLE_TABS.coordenacao;
   const allowedGestao = ROLE_GESTAO[coordRole] || null;
