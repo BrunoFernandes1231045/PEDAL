@@ -877,8 +877,7 @@ function ProposeSlotPicker({ onSubmit }) {
   const canSubmit = date && startTime;
   return (
     <div className="pedal-card" style={{ width: '100%' }}>
-      <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', marginBottom: 2 }}>Propõe um horário</div>
-      <div style={{ font: '400 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 12 }}>Indica quando estás disponível. A formação tem a duração de aproximadamente 2 horas.</div>
+      <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', marginBottom: 12 }}>Propõe um horário</div>
       <div style={{ display: 'grid', gap: 8 }}>
         <input className="pedal-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: '100%' }} />
         <input className="pedal-input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ width: '100%' }} placeholder="Hora de início" />
