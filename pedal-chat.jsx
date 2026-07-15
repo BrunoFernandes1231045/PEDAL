@@ -95,7 +95,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'schedule_practical': return [{ text: 'A coordenação propôs horários para a tua formação prática. 🗓️' }, { text: 'Escolhe o horário que te dá mais jeito. A formação tem a duração de aproximadamente 2 horas.' }];
       case 'propose_slot': return [{ text: 'Percebido! Indica o horário que te seria possível. 🗓️' }, { text: 'A formação tem a duração de aproximadamente 2 horas — indica a data e hora de início.' }];
       case 'practical_awaiting_coord': return [{ text: 'Recebemos a tua resposta! 🙌' }, { text: 'A coordenação vai confirmar assim que possível. Recebes a resposta aqui. 🗓️' }];
-      case 'practical_awaiting_phone': return [{ text: '😔 O horário que indicaste não foi possível confirmar.' }, { text: 'A equipa da Pedalar Sem Idade vai contactar-te por telefone para combinarem um horário definitivo.' }];
+      case 'practical_awaiting_phone': return [{ text: '😔 O horário que indicaste não foi possível confirmar.' }, { text: 'A equipa da Pedalar Sem Idade vai contactar-te por telefone para combinarem uma data que sirva a todos.' }];
       case 'practical_confirmed': {
         const sc = liveSched;
         const confirmedSlot = sc && sc.slots ? sc.slots.find((s) => s.state === 'confirmado') : null;

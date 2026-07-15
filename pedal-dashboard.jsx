@@ -1374,7 +1374,7 @@ function SlotReviewModal({ c, store, onClose }) {
   const refuseSlot = () => {
     if (!refuseReason.trim() || !reviewSlot) return;
     const label = fmtSlot(reviewSlot);
-    const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. A equipa Pedalar Sem Idade vai contactar-te por telefone para marcarem um horário definitivo.`;
+    const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. A equipa Pedalar Sem Idade vai contactar-te por telefone para combinarem uma data que sirva a todos.`;
     const newSlots = slots.map((s) => s === reviewSlot ? { ...s, state: 'recusado', rejectionReason: refuseReason.trim() } : s);
     const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
     patchSched({ ...sc, slots: newSlots, status: 'aguarda_telefone', chatNotify: notifs });
