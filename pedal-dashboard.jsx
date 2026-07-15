@@ -1293,7 +1293,7 @@ function SchedulingModal({ c, store, onClose }) {
 
 function SlotReviewModal({ c, store, onClose }) {
   const P = window.PEDAL;
-  const sc = store.S.scheduling[c.id] || c.scheduling || {};
+  const sc = c.scheduling || store.S.scheduling[c.id] || {};
   const slots = sc.slots || [];
   const selectedSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => s.state === 'selecionado');
   const confirmedSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => s.state === 'confirmado');
