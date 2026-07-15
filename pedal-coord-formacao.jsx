@@ -7,10 +7,46 @@ const { useState: useStateCF, useRef: useRefCF } = React;
 function PracticalCompleteModal({ c, store, onClose }) {
   const P = window.PEDAL;
   const sc = c.scheduling || store.S.scheduling[c.id] || {};
-  const slot = sc.chosen != null && sc.slots ? sc.slots[sc.chosen] : null;
+  const slots = sc.slots || [];
+  const slot = slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? slots[sc.chosen] : null);
   const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
+  const station = sc.stationId ? (store.realStations || []).find((s) => s.id === sc.stationId) : null;
+
   const [mode, setMode] = useStateCF(null); // 'confirm' | 'reject'
   const [comment, setComment] = useStateCF('');
+  const [editing, setEditing] = useStateCF(false);
+  const [editDate, setEditDate] = useStateCF(slot ? slot.date : '');
+  const [editTime, setEditTime] = useStateCF(slot ? (slot.startTime || slot.time || '') : '');
+  const [editTrainerId, setEditTrainerId] = useStateCF(sc.trainerId || '');
+  const [editStationId, setEditStationId] = useStateCF(sc.stationId || '');
+
+  const sortedTrainers = [...(store.realTrainers || [])].sort((a, b) =>
+    (a.locality === c.locality ? 0 : 1) - (b.locality === c.locality ? 0 : 1) || a.name.localeCompare(b.name));
+  const initials = (n) => n.split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+
+  const patchSched = (newSc) => {
+    store.setScheduling(c.id, newSc);
+    const backendId = c.live ? store.S.candidateId : c.id;
+    if (backendId && store.coordJwt) {
+      fetch(`/api/candidates/${backendId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
+        body: JSON.stringify({ scheduling: newSc }),
+      }).then(() => store.patchRealCandidate(backendId, { scheduling: newSc })).catch(() => {});
+    }
+  };
+
+  const saveEdit = () => {
+    if (!editDate || !editTime) return;
+    const newSlots = slots.map((s) =>
+      (s.state === 'confirmado' || s.state === 'definitivo') ? { ...s, date: editDate, startTime: editTime } : s
+    );
+    if (!newSlots.find((s) => s.state === 'confirmado' || s.state === 'definitivo')) {
+      newSlots.push({ date: editDate, startTime: editTime, state: 'confirmado' });
+    }
+    patchSched({ ...sc, slots: newSlots, trainerId: editTrainerId, stationId: editStationId });
+    setEditing(false);
+  };
 
   const moveStage = (stage) => { if (c.live) store.setStage(stage); else store.setOverride(c.id, stage); };
 
@@ -28,6 +64,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
     store.notify({ type: 'concluido', who: c.name, text: `concluiu a formação prática${comment ? ' — ' + comment : ''} · aguarda formalização` });
     onClose();
   };
+
   const doReject = () => {
     if (c.live) { store.setStage('rejeitado'); store.up({ rejection: { reason: comment } }); }
     else { store.setOverride(c.id, 'rejeitado'); }
@@ -43,9 +80,11 @@ function PracticalCompleteModal({ c, store, onClose }) {
     onClose();
   };
 
+  const lbl = { font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', margin: '16px 0 8px' };
+
   return (
     <div className="pedal-modal-wrap" onClick={onClose}>
-      <div className="pedal-modal" onClick={(e) => e.stopPropagation()} style={{ width: 440 }}>
+      <div className="pedal-modal" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
         <button className="pedal-modalclose" onClick={onClose}>✕</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <div className="pedal-kav big">{c.initials}</div>
@@ -56,41 +95,100 @@ function PracticalCompleteModal({ c, store, onClose }) {
           {c.live && <span style={{ marginLeft: 'auto' }}><Pill tone="green"><span className="pedal-livedot" style={{ position: 'static' }} />Em direto</Pill></span>}
         </div>
 
-        <div style={{ display: 'grid', gap: 7, marginTop: 16 }}>
-          <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Sessão</span><span style={{ fontWeight: 700, color: 'var(--ink)' }}>{slot ? `${P.fmtDate(slot.date)} · ${slot.startTime || slot.time || ''}${slot.endTime ? `–${slot.endTime}` : ''}` : 'sem horário confirmado'}</span></div>
-          <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Coach</span><span style={{ fontWeight: 700, color: trainer ? 'var(--ink)' : 'var(--accent-deep)' }}>{trainer ? trainer.name : 'por atribuir'}</span></div>
-        </div>
-
-        <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', margin: '18px 0 8px' }}>
-          Comentário sobre a decisão {mode === 'reject' ? '(recomendado)' : '(opcional)'}
-        </div>
-        <textarea className="pedal-input" style={{ height: 74, paddingTop: 10, resize: 'none' }} value={comment} onChange={(e) => setComment(e.target.value)}
-          placeholder={mode === 'reject' ? 'Ex.: precisa de mais prática de travagem antes de conduzir com passageiro…' : 'Ex.: conduziu com segurança e à vontade — apto para ativação.'} />
-
-        {!mode ? (
-          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode('reject')}>Rejeitar piloto</button>
-            <button className="pedal-btn primary" style={{ flex: 2 }} onClick={() => setMode('confirm')}>Confirmar conclusão ✓</button>
-          </div>
-        ) : mode === 'confirm' ? (
-          <div style={{ marginTop: 16 }}>
-            <div className="pedal-empcard" style={{ background: 'var(--primary-soft)', borderColor: 'var(--primary)' }}>
-              <p style={{ font: '500 12.5px/1.5 var(--ui)', color: 'var(--primary-deep)', margin: 0 }}>Ao confirmar, o piloto recebe na app o pedido para aceitar os termos e assinar. Só depois fica ativo.</p>
+        {/* Info da sessão */}
+        {!editing && (
+          <div style={{ display: 'grid', gap: 7, marginTop: 16 }}>
+            <div className="pedal-ivrow">
+              <span style={{ color: 'var(--ink-soft)' }}>Sessão</span>
+              <span style={{ fontWeight: 700, color: slot ? 'var(--ink)' : 'var(--accent-deep)' }}>
+                {slot ? `${P.fmtDate(slot.date)} · ${slot.startTime || slot.time || ''}` : 'sem horário confirmado'}
+              </span>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode(null)}>Voltar</button>
-              <button className="pedal-btn primary" style={{ flex: 1 }} onClick={doConfirm}>Confirmar conclusão</button>
+            <div className="pedal-ivrow">
+              <span style={{ color: 'var(--ink-soft)' }}>Coach</span>
+              <span style={{ fontWeight: 700, color: trainer ? 'var(--ink)' : 'var(--accent-deep)' }}>{trainer ? trainer.name : 'por atribuir'}</span>
             </div>
+            <div className="pedal-ivrow">
+              <span style={{ color: 'var(--ink-soft)' }}>Local</span>
+              <span style={{ fontWeight: 700, color: station ? 'var(--ink)' : 'var(--accent-deep)' }}>{station ? station.name : 'por definir'}</span>
+            </div>
+            {!mode && (
+              <button type="button" onClick={() => setEditing(true)}
+                style={{ marginTop: 2, alignSelf: 'start', background: 'none', border: 'none', cursor: 'pointer', font: '600 12px var(--ui)', color: 'var(--primary-deep)', padding: 0, textDecoration: 'underline' }}>
+                Editar horário, coach ou local
+              </button>
+            )}
           </div>
-        ) : (
+        )}
+
+        {/* Edição inline */}
+        {editing && (
           <div style={{ marginTop: 16 }}>
+            <div style={lbl}>Data e hora de início</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode(null)}>Voltar</button>
-              <button className="pedal-btn primary" style={{ flex: 1, background: 'var(--accent-deep)' }} onClick={doReject}>Confirmar rejeição</button>
+              <input className="pedal-input" type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={{ flex: 2 }} />
+              <input className="pedal-input" type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} style={{ flex: 1 }} />
+            </div>
+            <div style={lbl}>Coach</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {sortedTrainers.map((t) => (
+                <button key={t.id} className={'pedal-traineropt' + (editTrainerId === t.id ? ' on' : '')} onClick={() => setEditTrainerId(editTrainerId === t.id ? '' : t.id)}>
+                  <div className="pedal-traineravsm">{initials(t.name)}</div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                    <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{t.name}</div>
+                    <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>{t.locality || 'sem território'} · {t.phone}</div>
+                  </div>
+                  {t.locality === c.locality && editTrainerId !== t.id && <span className="pedal-trainertag">mesma zona</span>}
+                  {editTrainerId === t.id && <Icon name="check" size={17} color="var(--primary)" />}
+                </button>
+              ))}
+            </div>
+            <div style={lbl}>Local de encontro</div>
+            <select className="pedal-select" style={{ width: '100%' }} value={editStationId} onChange={(e) => setEditStationId(e.target.value)}>
+              <option value="">— escolher local —</option>
+              {[...(store.realStations || [])].sort((a, b) => (a.locality === c.locality ? 0 : 1) - (b.locality === c.locality ? 0 : 1)).map((s) => (
+                <option key={s.id} value={s.id}>{s.name} · {s.locality}</option>
+              ))}
+            </select>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setEditing(false)}>Cancelar</button>
+              <button className="pedal-btn primary" style={{ flex: 1, opacity: (editDate && editTime) ? 1 : 0.45 }} disabled={!editDate || !editTime} onClick={saveEdit}>Guardar alterações</button>
             </div>
           </div>
         )}
-        <p className="pedal-tasknote" style={{ marginTop: 14 }}>A confirmação da formação prática é sempre uma decisão da equipa, registada com o teu comentário.</p>
+
+        {!editing && (
+          <>
+            <div style={lbl}>Comentário sobre a decisão {mode === 'reject' ? '(recomendado)' : '(opcional)'}</div>
+            <textarea className="pedal-input" style={{ height: 74, paddingTop: 10, resize: 'none' }} value={comment} onChange={(e) => setComment(e.target.value)}
+              placeholder={mode === 'reject' ? 'Ex.: precisa de mais prática de travagem antes de conduzir com passageiro…' : 'Ex.: conduziu com segurança e à vontade — apto para ativação.'} />
+
+            {!mode ? (
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode('reject')}>Rejeitar piloto</button>
+                <button className="pedal-btn primary" style={{ flex: 2 }} onClick={() => setMode('confirm')}>Confirmar conclusão ✓</button>
+              </div>
+            ) : mode === 'confirm' ? (
+              <div style={{ marginTop: 16 }}>
+                <div className="pedal-empcard" style={{ background: 'var(--primary-soft)', borderColor: 'var(--primary)' }}>
+                  <p style={{ font: '500 12.5px/1.5 var(--ui)', color: 'var(--primary-deep)', margin: 0 }}>Ao confirmar, o piloto recebe na app o pedido para aceitar os termos e assinar. Só depois fica ativo.</p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode(null)}>Voltar</button>
+                  <button className="pedal-btn primary" style={{ flex: 1 }} onClick={doConfirm}>Confirmar conclusão</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode(null)}>Voltar</button>
+                  <button className="pedal-btn primary" style={{ flex: 1, background: 'var(--accent-deep)' }} onClick={doReject}>Confirmar rejeição</button>
+                </div>
+              </div>
+            )}
+            <p className="pedal-tasknote" style={{ marginTop: 14 }}>A confirmação da formação prática é sempre uma decisão da equipa, registada com o teu comentário.</p>
+          </>
+        )}
       </div>
     </div>
   );
