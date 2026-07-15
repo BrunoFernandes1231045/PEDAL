@@ -38,13 +38,38 @@ function PracticalCompleteModal({ c, store, onClose }) {
 
   const saveEdit = () => {
     if (!editDate || !editTime) return;
+
+    const P = window.PEDAL;
+    const oldDate = slot ? slot.date : null;
+    const oldTime = slot ? (slot.startTime || slot.time || '') : null;
+    const oldTrainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
+    const oldStation = sc.stationId ? (store.realStations || []).find((s) => s.id === sc.stationId) : null;
+    const newTrainer = editTrainerId ? (store.realTrainers || []).find((t) => t.id === editTrainerId) : null;
+    const newStation = editStationId ? (store.realStations || []).find((s) => s.id === editStationId) : null;
+
+    const changes = [];
+    if (editDate !== oldDate || editTime !== oldTime)
+      changes.push(`data e hora: ${P.fmtDate(editDate)} · ${editTime}`);
+    if (editTrainerId !== sc.trainerId && newTrainer)
+      changes.push(`coach: ${newTrainer.name}${newTrainer.phone ? ` (${newTrainer.phone})` : ''}`);
+    if (editStationId !== sc.stationId && newStation)
+      changes.push(`local: ${newStation.name}${newStation.address ? ` — ${newStation.address}` : ''}`);
+
     const newSlots = slots.map((s) =>
       (s.state === 'confirmado' || s.state === 'definitivo') ? { ...s, date: editDate, startTime: editTime } : s
     );
     if (!newSlots.find((s) => s.state === 'confirmado' || s.state === 'definitivo')) {
       newSlots.push({ date: editDate, startTime: editTime, state: 'confirmado' });
     }
-    patchSched({ ...sc, slots: newSlots, trainerId: editTrainerId, stationId: editStationId });
+
+    const notifs = [...(sc.chatNotify || [])];
+    if (changes.length > 0) {
+      const text = `📋 A tua formação prática foi atualizada pela coordenação. O que mudou: ${changes.join('; ')}.`;
+      notifs.push({ id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false });
+    }
+
+    patchSched({ ...sc, slots: newSlots, trainerId: editTrainerId, stationId: editStationId, chatNotify: notifs });
+    store.notify({ type: 'agendado', who: c.name, text: `horário da formação prática atualizado${changes.length ? ' — ' + changes.join(', ') : ''}` });
     setEditing(false);
   };
 
