@@ -1365,7 +1365,10 @@ function SlotReviewModal({ c, store, onClose }) {
     if (station) msg += ` Encontram-se em ${station.name}${station.address ? ` — ${station.address}` : ''}.`;
     if (trainer) msg += ` O teu coach é ${trainer.name}${trainer.phone ? ` (${trainer.phone})` : ''}.`;
     const newSlots = slots.map((s) => s === reviewSlot ? { ...s, state: 'confirmado' } : s);
-    const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text: msg, shown: false }];
+    const notifs = [...(sc.chatNotify || []),
+      { id: 'cn' + Math.random().toString(36).slice(2, 7), text: msg, shown: false },
+      { id: 'cn' + Math.random().toString(36).slice(2, 7), text: '📞 Para qualquer remarcação ou desmarcação, contacta-nos por telefone para o 123456789.', shown: false },
+    ];
     patchSched({ ...sc, slots: newSlots, status: 'confirmado', chatNotify: notifs });
     store.notify({ type: 'agendado', who: c.name, text: `formação prática confirmada — ${label}` });
     setDoneAction('confirmed');

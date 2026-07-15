@@ -61,6 +61,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
       if (newTrainer) details += ` O teu coach é ${newTrainer.name}${newTrainer.phone ? ` (${newTrainer.phone})` : ''}.`;
       notifs.push({ id: 'cn' + Math.random().toString(36).slice(2, 7), text: '📋 A tua formação prática foi atualizada pela coordenação.', shown: false });
       notifs.push({ id: 'cn' + Math.random().toString(36).slice(2, 7), text: details, shown: false });
+      notifs.push({ id: 'cn' + Math.random().toString(36).slice(2, 7), text: '📞 Para qualquer remarcação ou desmarcação, contacta-nos por telefone para o 123456789.', shown: false });
     }
 
     patchSched({ ...sc, slots: newSlots, trainerId: editTrainerId, stationId: editStationId, chatNotify: notifs });
