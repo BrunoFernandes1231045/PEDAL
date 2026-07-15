@@ -1561,7 +1561,7 @@ function CandidateDetail({ c, store, onClose }) {
   const iv = isLiveC
     ? { ...(c.interview || {}), ...(store.S.candidate.interview || {}) }
     : (c.interview || {});
-  const ivLabels = { gdpr: 'RGPD', conhecimento: 'Como conheceu', voluntariado: 'Voluntariado', voluntariado_info: 'Exp. voluntariado', bicicleta: 'Bicicleta', carta: 'Carta de condução' };
+  const ivLabels = { conhecimento: 'Como conheceu', voluntariado: 'Voluntariado', voluntariado_info: 'Exp. voluntariado', bicicleta: 'Bicicleta', carta: 'Carta de condução' };
   const age = c.dob ? Math.floor((Date.now() - new Date(c.dob).getTime()) / 3.15576e10) : null;
   const transcript = isLiveC
     ? store.S.messages.filter((m) => m.text)

@@ -110,9 +110,6 @@ PEDAL.matchFAQ = function (text) {
 
 // ── Entrevista estruturada (RF-12) ───────────────────────────────────
 PEDAL.INTERVIEW = [
-  { id: 'gdpr', kind: 'choice',
-    q: 'Autorizas e aceitas o tratamento e acesso dos teus dados pessoais, cedidos no âmbito da candidatura como voluntário da Parábola Citadina Associação, dando permissão para seres contactado via e-mail ou telefone no âmbito deste projeto?',
-    options: ['Sim', 'Não'] },
   { id: 'conhecimento', kind: 'text', q: 'Como tiveste conhecimento do projeto?' },
   { id: 'voluntariado', kind: 'choice', q: 'Já fizeste voluntariado?', options: ['Sim', 'Não'] },
   { id: 'voluntariado_info', kind: 'text', q: 'Se já fizeste voluntariado antes, conta-nos sobre isso!',

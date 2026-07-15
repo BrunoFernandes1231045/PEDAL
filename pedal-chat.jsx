@@ -57,6 +57,8 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'present': return [{ text: 'Boa! 🎉 Deixa-me apresentar-te o projeto em três traços.' }, { card: 'project' }, { text: 'A formação e o seguro são connosco. Só pedimos uma coisa em troca: um compromisso de cerca de 2 horas por semana, para dar consistência aos passeios. É bom saberes isto já, para veres se encaixa na tua rotina. ⏱️' }];
       case 'faq': return [{ text: 'Pergunta à vontade! Toca num tema ou escreve a tua dúvida. 💬' }];
       case 'consent': return [{ text: 'Perfeito! Vamos tratar da tua inscrição. 📝' }];
+      case 'gdpr_consent': return [{ text: 'Antes de continuarmos, precisamos da tua autorização. 🔒' }, { text: 'Autorizas e aceitas o tratamento e acesso dos teus dados pessoais, cedidos no âmbito da candidatura como voluntário da Parábola Citadina Associação, dando permissão para seres contactado via e-mail ou telefone no âmbito deste projeto?' }];
+      case 'gdpr_refused': return [{ text: '😔 Sem a tua autorização não é possível prosseguir com a candidatura.' }, { text: 'Se mudares de ideias, podes alterar a resposta.' }];
       case 'collect': return [{ text: 'Primeiro, fico a conhecer-te.' }];
       case 'triage': return [{ text: `Prazer, ${first || 'bem-vindo'}! 🙌 Agora diz-me onde e quando gostarias de pedalar.` }, { text: 'Os passeios decorrem normalmente de manhã entre as 10h e as 12h, ou de tarde entre as 14h e as 17h. Tens isso em conta ao preencher a disponibilidade. 🕐' }];
       case 'triage_result': {
@@ -139,6 +141,8 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'present': return { type: 'quick', options: [{ label: 'O que é a Pedalar Sem Idade?', faq: 'missao' }, { label: 'Como é a formação?', faq: 'seguranca' }, { label: 'Quais os requisitos?', faq: 'requisitos' }, { label: 'Quero inscrever-me ✍️', go: 'consent', accent: 'fill' }] };
       case 'faq': case 'waitlisted': return { type: 'faq' };
       case 'consent': return { type: 'card:consent' };
+      case 'gdpr_consent': return { type: 'quick', options: [{ label: 'Sim, autorizo ✓', go: 'collect', accent: 'fill' }, { label: 'Não autorizo', go: 'gdpr_refused' }] };
+      case 'gdpr_refused': return { type: 'quick', options: [{ label: 'Alterar resposta', go: 'gdpr_consent' }] };
       case 'collect': return { type: 'form_profile' };
       case 'triage': return { type: 'triage' };
       case 'triage_result': {
@@ -568,7 +572,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         </div>
       );
     }
-    if (it.type === 'card:consent') return <ConsentCard onAccept={() => { addMessage({ from: 'system', text: 'Consentimento de dados aceite (RGPD)' }); enterNode('collect'); }} onMore={() => say([{ text: 'Os teus dados ficam acessíveis apenas à coordenação da Pedalar Sem Idade, são usados só para o processo de voluntariado e podes pedir para os eliminar a qualquer momento. 🔒' }], () => setInteraction(interactionFor('consent')))} />;
+    if (it.type === 'card:consent') return <ConsentCard onAccept={() => { addMessage({ from: 'system', text: 'Consentimento de dados aceite (RGPD)' }); enterNode('gdpr_consent'); }} onMore={() => say([{ text: 'Os teus dados ficam acessíveis apenas à coordenação da Pedalar Sem Idade, são usados só para o processo de voluntariado e podes pedir para os eliminar a qualquer momento. 🔒' }], () => setInteraction(interactionFor('consent')))} />;
     if (it.type === 'form_profile') return <ProfileForm onSubmit={(d) => {
       patchCandidate(d);
       const pw = store.createAccount(d.email);
