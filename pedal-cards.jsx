@@ -281,7 +281,7 @@ function CountryDialPicker({ value, onChange }) {
   const ct = ALL_COUNTRIES.find((c) => c.code === value) || ALL_COUNTRIES[0];
   const q = normalize(search.trim());
   const filtered = q
-    ? ALL_COUNTRIES.filter((c) => normalize(c.label).includes(q) || c.dialCode.replace('+', '').startsWith(q.replace('+', '')))
+    ? ALL_COUNTRIES.filter((c) => normalize(c.label).startsWith(q) || c.dialCode.replace('+', '').startsWith(q.replace('+', '')))
     : ALL_COUNTRIES;
 
   return (
