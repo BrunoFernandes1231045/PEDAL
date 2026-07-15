@@ -60,7 +60,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'gdpr_consent': return [{ text: 'Antes de continuarmos, precisamos da tua autorização. 🔒' }, { text: 'Autorizas e aceitas o tratamento e acesso dos teus dados pessoais, cedidos no âmbito da candidatura como voluntário da Parábola Citadina Associação, dando permissão para seres contactado via e-mail ou telefone no âmbito deste projeto?' }];
       case 'gdpr_refused': return [{ text: '😔 Sem a tua autorização não é possível prosseguir com a candidatura.' }, { text: 'Se mudares de ideias, podes alterar a resposta.' }];
       case 'collect': return [{ text: 'Primeiro, fico a conhecer-te.' }];
-      case 'triage': return [{ text: `Prazer, ${first || 'bem-vindo'}! 🙌 Agora diz-me onde e quando gostarias de pedalar.` }, { text: 'Os passeios decorrem normalmente de manhã entre as 10h e as 12h, ou de tarde entre as 14h e as 17h. Tens isso em conta ao preencher a disponibilidade. 🕐' }];
+      case 'triage': return [{ text: `Prazer, ${first || 'bem-vindo'}! 🙌 Agora diz-me onde e quando gostarias de pedalar.` }, { text: 'Os passeios decorrem normalmente de manhã entre as 10h e as 12h, ou de tarde entre as 14h e as 17h. Tenha isso em conta ao preencher a disponibilidade. 🕐' }];
       case 'triage_result': {
         const r = triageResultRef.current || {};
         const open = r.open || [];
