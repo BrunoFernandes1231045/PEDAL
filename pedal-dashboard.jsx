@@ -1961,7 +1961,19 @@ const NEEDS_DAYS = [
 ];
 
 function NeedsAdmin({ store }) {
-  const localities = store.realLocalities || window.PEDAL.LOCALITIES;
+  const rawLocalities = store.realLocalities || window.PEDAL.LOCALITIES;
+  const localities = (() => {
+    try {
+      const order = JSON.parse(localStorage.getItem('pedal_loc_order') || 'null');
+      if (!order) return rawLocalities;
+      return [...rawLocalities].sort((a, b) => {
+        const ai = order.indexOf(a.id); const bi = order.indexOf(b.id);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1; if (bi === -1) return -1;
+        return ai - bi;
+      });
+    } catch { return rawLocalities; }
+  })();
   const [table, setTable] = useStateD(() => store.realNeeds || {});
   const [saved, setSaved] = useStateD(false);
   const [saving, setSaving] = useStateD(false);
