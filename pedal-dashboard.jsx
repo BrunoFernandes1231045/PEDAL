@@ -422,9 +422,9 @@ function OverviewSection({ ctx }) {
       </div>
 
       {/* Funil de ponta a ponta — a toda a largura */}
-      <div className="pedal-panel">
+      <div className="pedal-panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 300px)' }}>
         <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Funil de captação</span><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><ExportBtn rows={inFunnel} store={store} fileId="funil-processo" /></div></div>
-        <div className="pedal-funnel">
+        <div className="pedal-funnel" style={{ flex: 1 }}>
           {P.FUNNEL.map((col) => {
             let list;
             if (col.id === 'aguarda') {
