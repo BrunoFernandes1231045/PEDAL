@@ -445,6 +445,7 @@ function OverviewSection({ ctx }) {
             } else {
               list = candidates.filter((c) => P.funnelCol(c.stage) === col.id);
             }
+            list = [...list].sort((a, b) => (P.stageIndex(b.stage) - P.stageIndex(a.stage)) || ((b.days || 0) - (a.days || 0)));
             return (
               <div key={col.id} className="pedal-fcol">
                 <div className="pedal-kcolhead"><span>{col.label}</span><span className="pedal-kcount">{list.length}</span></div>
