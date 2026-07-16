@@ -457,7 +457,7 @@ function OverviewSection({ ctx }) {
                           <div className="pedal-kav">{c.initials}</div>
                           <div style={{ minWidth: 0, textAlign: 'left' }}>
                             <div style={{ font: '700 12.5px var(--ui)', color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
-                            <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.locality}</div>
+                            <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task ? task.label : P.stageLabel(c.stage)}</div>
                           </div>
                           {c.live && <span className="pedal-livedot" title="Em direto" />}
                         </button>
