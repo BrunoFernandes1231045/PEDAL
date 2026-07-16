@@ -73,6 +73,12 @@ function Dashboard({ store }) {
   const [notifOpen, setNotifOpen] = useStateD(false);
   const [profileModal, setProfileModal] = useStateD(null); // 'edit' | 'pw' | null
 
+  useEffectD(() => {
+    const wrap = document.querySelector('.pedal-dashwrap');
+    if (!wrap) return;
+    wrap.style.overflowY = (screen === 'operacao' && section === 'geral') ? 'hidden' : '';
+  }, [screen, section]);
+
   // candidato em direto (a partir do chat)
   const liveActive = !!S.stage;
   const alreadyInBackend = S.candidateId && store.realCandidates !== null && store.realCandidates.some((c) => c.id === S.candidateId);
