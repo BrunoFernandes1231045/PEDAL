@@ -693,6 +693,8 @@ function ChatView({ store, tone = 'caloroso' }) {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
           body: JSON.stringify({ signature: sig }),
+        }).then((r) => {
+          if (r.ok) store.patchRealCandidate(S.candidateId, { signature: sig, stage: 'ativo' });
         }).catch(() => {});
       }
       addMessage({ from: 'system', text: 'Termo de compromisso assinado · piloto ativado' });

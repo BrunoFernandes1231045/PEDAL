@@ -185,7 +185,7 @@ function Dashboard({ store }) {
       {screen === 'dashboards' && <AnalyticsScreen ctx={ctx} />}
       {screen === 'gestao' && <GestaoScreen ctx={ctx} />}
 
-      {sel && <CandidateDetail c={sel} store={store} onClose={() => setSel(null)} />}
+      {sel && <CandidateDetail c={(store.realCandidates || []).find((x) => x.id === sel.id) || sel} store={store} onClose={() => setSel(null)} />}
       {schedFor && <SchedulingModal c={schedFor} store={store} onClose={() => setSchedFor(null)} />}
       {completeFor && <PracticalCompleteModal c={completeFor} store={store} onClose={() => setCompleteFor(null)} />}
       {slotReviewFor && <SlotReviewModal c={slotReviewFor} store={store} onClose={() => setSlotReviewFor(null)} />}
