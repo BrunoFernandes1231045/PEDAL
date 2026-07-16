@@ -84,7 +84,11 @@ function Dashboard({ store }) {
     periods: S.candidate.periods, weekdays: [], interview: S.candidate.interview, contact: S.candidate.contact, email: S.candidate.email, dob: S.candidate.dob, nif: S.candidate.nif, contactDate: '',
   } : null;
   const seedList = P.SEED_CANDIDATES.map((c) => ({ ...c, stage: S.overrides[c.id] || c.stage, localityId: (P.LOCALITIES.find((l) => l.name === c.locality) || {}).id }));
-  const realWithOverrides = store.realCandidates !== null ? store.realCandidates.map((c) => S.overrides[c.id] ? { ...c, stage: S.overrides[c.id] } : c) : null;
+  const realWithOverrides = store.realCandidates !== null ? store.realCandidates.map((c) => {
+    if (S.overrides[c.id]) return { ...c, stage: S.overrides[c.id] };
+    if (c.id === S.candidateId && S.stage) return { ...c, stage: S.stage };
+    return c;
+  }) : null;
   const candidates = [...(live ? [live] : []), ...(realWithOverrides !== null ? realWithOverrides : seedList)];
 
   const isLiveCandidate = (c) => c.live || c.id === S.candidateId;

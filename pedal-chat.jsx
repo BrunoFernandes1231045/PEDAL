@@ -688,10 +688,11 @@ function ChatView({ store, tone = 'caloroso' }) {
     }
     if (it.type === 'card:formalize') return <FormalizationCard onConfirm={(sig) => {
       store.up({ signature: sig, termsAccepted: true });
-      if (S.candidateId && store.candidateJwt) {
+      const fJwt = store.candidateJwt || store.coordJwt;
+      if (S.candidateId && fJwt) {
         fetch(`/api/candidates/${S.candidateId}/formalize`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${fJwt}` },
           body: JSON.stringify({ signature: sig }),
         }).then((r) => {
           if (r.ok) store.patchRealCandidate(S.candidateId, { signature: sig, stage: 'ativo' });
