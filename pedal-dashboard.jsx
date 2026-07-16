@@ -483,30 +483,6 @@ function OverviewSection({ ctx }) {
         </div>
       </div>
 
-      {/* Central de tarefas — a toda a largura */}
-      <div className="pedal-panel pedal-taskpanel" style={{ marginTop: 18 }}>
-        <div className="pedal-panelhead">
-          <span style={{ font: '700 14px var(--display)', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>Central de tarefas{tasks.length > 0 && <span className="pedal-taskbadge">{tasks.length}</span>}</span>
-          <Pill tone="amber">requer decisão</Pill>
-        </div>
-        {tasks.length === 0 ? (
-          <div className="pedal-taskempty"><Icon name="check" size={16} color="var(--ink-soft)" />Tudo em dia — sem tarefas pendentes.</div>
-        ) : (
-          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
-            {tasks.map((t) => (
-              <div key={t.key} className="pedal-taskrow">
-                <div className={'pedal-feedic ' + (kindTone[t.kind] || 'neutral')} style={{ width: 36, height: 36 }}><Icon name={kindIcon[t.kind] || 'doc'} size={15} /></div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>{(t.c && t.c.name) || t.name}{t.c && t.c.live && <span className="pedal-livedot" style={{ position: 'static', margin: 0 }} />}</div>
-                  <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</div>
-                </div>
-                <button className="pedal-taskbtn primary" onClick={t.act}>{t.btn}</button>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="pedal-tasknote">Validação, agendamento, conclusão e pedidos de contacto — tudo o que precisa de decisão humana, num só lugar.</p>
-      </div>
     </div>
   );
 }
