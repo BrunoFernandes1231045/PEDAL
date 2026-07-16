@@ -15,7 +15,7 @@ const settingsRouter = require('./routes/settings');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', '..')));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
