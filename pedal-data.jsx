@@ -163,13 +163,13 @@ PEDAL.STAGES = [
 PEDAL.stageIndex = (id) => PEDAL.STAGES.findIndex((s) => s.id === id);
 PEDAL.stageLabel = (id) => (PEDAL.STAGES.find((s) => s.id === id) || {}).label || id;
 
-// Funil de captação — apenas estes 6 estados (RF). Outros estados têm secções próprias.
+// Funil de captação — 5 colunas. 'aguarda' e 'formacao' têm lógica extra no dashboard.
 PEDAL.FUNNEL = [
-  { id: 'inscricao',  label: 'Inscrição',   match: ['inscricao', 'apresentacao'] },
-  { id: 'triagem',    label: 'Triagem',     match: ['triagem'] },
-  { id: 'entrevista', label: 'Entrevista',  match: ['entrevista'] },
-  { id: 'validacao',  label: 'Validação',   match: ['validacao'] },
-  { id: 'onboarding', label: 'Onboarding', match: ['onboarding'] },
+  { id: 'ite',        label: 'Inscrição, Triagem e Entrevista', match: ['inscricao', 'apresentacao', 'triagem', 'entrevista'] },
+  { id: 'validacao',  label: 'Validação',                       match: ['validacao'] },
+  { id: 'onboarding', label: 'Onboarding',                      match: ['onboarding'] },
+  { id: 'aguarda',    label: 'Aguarda Agendamento',             match: ['pratica'] },
+  { id: 'formacao',   label: 'Formação',                        match: ['formalizacao'] },
 ];
 // devolve a coluna do funil de um estado, ou null se pertence a outra secção
 PEDAL.funnelCol = (stage) => (PEDAL.FUNNEL.find((c) => c.match.includes(stage)) || {}).id || null;

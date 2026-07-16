@@ -425,7 +425,25 @@ function OverviewSection({ ctx }) {
         <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Funil de captação</span><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><ExportBtn rows={inFunnel} store={store} fileId="funil-processo" /></div></div>
         <div className="pedal-funnel">
           {P.FUNNEL.map((col) => {
-            const list = candidates.filter((c) => P.funnelCol(c.stage) === col.id);
+            let list;
+            if (col.id === 'aguarda') {
+              list = candidates.filter((c) => {
+                if (c.stage !== 'pratica') return false;
+                const sc = schedOf(c) || {};
+                const confirmed = (sc.slots || []).find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null && sc.slots ? sc.slots[sc.chosen] : null);
+                return !confirmed;
+              });
+            } else if (col.id === 'formacao') {
+              list = candidates.filter((c) => {
+                if (c.stage === 'formalizacao') return true;
+                if (c.stage !== 'pratica') return false;
+                const sc = schedOf(c) || {};
+                const confirmed = (sc.slots || []).find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null && sc.slots ? sc.slots[sc.chosen] : null);
+                return !!confirmed;
+              });
+            } else {
+              list = candidates.filter((c) => P.funnelCol(c.stage) === col.id);
+            }
             return (
               <div key={col.id} className="pedal-fcol">
                 <div className="pedal-kcolhead"><span>{col.label}</span><span className="pedal-kcount">{list.length}</span></div>
