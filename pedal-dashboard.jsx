@@ -446,7 +446,7 @@ function OverviewSection({ ctx }) {
               list = candidates.filter((c) => P.funnelCol(c.stage) === col.id);
             }
             if (col.id === 'aguarda') {
-              const schedRank = (st) => ({ aguarda_candidato: 1, aguarda_telefone: 2, aguarda_coordenacao: 3, candidato_propoe: 3 }[st] || 0);
+              const schedRank = (st) => ({ aguarda_candidato: 1, aguarda_coordenacao: 2, candidato_propoe: 3, aguarda_telefone: 4 }[st] || 0);
               list = [...list].sort((a, b) => (schedRank(getSchedStatus(schedOf(a))) - schedRank(getSchedStatus(schedOf(b)))) || ((b.days || 0) - (a.days || 0)));
             } else {
               list = [...list].sort((a, b) => (P.stageIndex(a.stage) - P.stageIndex(b.stage)) || ((b.days || 0) - (a.days || 0)));
