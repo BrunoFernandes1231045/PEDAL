@@ -692,7 +692,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         fetch(`/api/candidates/${S.candidateId}/formalize`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
-          body: JSON.stringify({ nif: S.candidate.nif || '', signature: 'signed' }),
+          body: JSON.stringify({ signature: sig }),
         }).catch(() => {});
       }
       addMessage({ from: 'system', text: 'Termo de compromisso assinado · piloto ativado' });

@@ -71,12 +71,12 @@ router.get('/:id', requireAuth, async (req, res) => {
 // PATCH /api/candidates/:id/formalize — próprio candidato
 // Must be registered BEFORE /:id to avoid Express matching 'formalize' as :id param
 router.patch('/:id/formalize', requireAuth, async (req, res) => {
-  const { nif, signature } = req.body;
-  if (!nif || !signature) return res.status(400).json({ error: 'nif e signature são obrigatórios' });
+  const { signature } = req.body;
+  if (!signature) return res.status(400).json({ error: 'signature é obrigatória' });
 
   const { data, error } = await supabase
     .from('candidates')
-    .update({ nif, signature, stage: 'ativo', updated_at: new Date() })
+    .update({ signature, stage: 'ativo', updated_at: new Date() })
     .eq('id', req.params.id).select().single();
 
   if (error) return res.status(500).json({ error: error.message });

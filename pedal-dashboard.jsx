@@ -1629,6 +1629,15 @@ function CandidateDetail({ c, store, onClose }) {
           <DetailItem label="No funil há" value={c.days === 0 ? 'hoje' : c.days + ' dias'} />
         </div>
 
+        {c.signature && c.signature.startsWith('data:image') && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 6 }}>Assinatura</div>
+            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: 8, display: 'inline-block' }}>
+              <img src={c.signature} alt="Assinatura" style={{ display: 'block', maxWidth: 320, height: 'auto', borderRadius: 6 }} />
+            </div>
+          </div>
+        )}
+
         {c.rejectReason && (
           <div style={{ marginTop: 12, background: 'var(--app-bg)', borderRadius: 11, padding: '10px 12px', font: '500 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)' }}><strong style={{ color: 'var(--ink)' }}>Motivo da rejeição:</strong> {c.rejectReason}</div>
         )}
