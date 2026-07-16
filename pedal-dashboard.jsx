@@ -1571,7 +1571,8 @@ function CandidateDetail({ c, store, onClose }) {
     ? { ...(c.interview || {}), ...(store.S.candidate.interview || {}) }
     : (c.interview || {});
   const ivLabels = { conhecimento: 'Como conheceu', voluntariado: 'Voluntariado', voluntariado_info: 'Exp. voluntariado', bicicleta: 'Bicicleta', carta: 'Carta de condução' };
-  const age = c.dob ? Math.floor((Date.now() - new Date(c.dob).getTime()) / 3.15576e10) : null;
+  const ageRaw = c.dob ? Math.floor((Date.now() - new Date(c.dob).getTime()) / 3.15576e10) : null;
+  const age = ageRaw !== null && ageRaw > 0 && ageRaw < 120 ? ageRaw : null;
   const transcript = isLiveC
     ? store.S.messages.filter((m) => m.text)
     : Array.isArray(c.chat_messages) ? c.chat_messages.filter((m) => m.text) : [];
@@ -1652,7 +1653,7 @@ function CandidateDetail({ c, store, onClose }) {
             <div style={{ marginTop: 16 }}>
               <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 8 }}>Formação prática</div>
               <div style={{ display: 'grid', gap: 7 }}>
-                <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Horário</span><span style={{ fontWeight: 700, color: 'var(--ink)' }}>{chosen ? `${P.fmtDate(chosen.date)} · ${chosen.time}` : `${(sc2.slots || []).length} proposto(s) · aguarda resposta`}</span></div>
+                <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Horário</span><span style={{ fontWeight: 700, color: 'var(--ink)' }}>{chosen ? `${P.fmtDate(chosen.date)} · ${chosen.time}` : c.stage === 'ativo' ? 'sem horário confirmado' : `${(sc2.slots || []).length} proposto(s) · aguarda resposta`}</span></div>
                 <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Formador</span><span style={{ fontWeight: 700, color: tr ? 'var(--ink)' : 'var(--accent-deep)' }}>{tr ? `${tr.name}${tr.locality ? ` · ${tr.locality}` : ''}` : 'por atribuir'}</span></div>
                 <div className="pedal-ivrow"><span style={{ color: 'var(--ink-soft)' }}>Local de encontro</span><span style={{ fontWeight: 700, color: stn ? 'var(--ink)' : 'var(--accent-deep)' }}>{stn ? stn.name : 'por definir'}</span></div>
               </div>
