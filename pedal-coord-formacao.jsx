@@ -145,6 +145,10 @@ function PracticalCompleteModal({ c, store, onClose }) {
         {/* Edição inline */}
         {editing && (
           <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setEditing(false)}>Cancelar</button>
+              <button className="pedal-btn primary" style={{ flex: 1, opacity: (editDate && editTime) ? 1 : 0.45 }} disabled={!editDate || !editTime} onClick={saveEdit}>Guardar alterações</button>
+            </div>
             <div style={lbl}>Data e hora de início</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input className="pedal-input" type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={{ flex: 2 }} />
@@ -171,10 +175,6 @@ function PracticalCompleteModal({ c, store, onClose }) {
                 <option key={s.id} value={s.id}>{s.name} · {s.locality}</option>
               ))}
             </select>
-            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setEditing(false)}>Cancelar</button>
-              <button className="pedal-btn primary" style={{ flex: 1, opacity: (editDate && editTime) ? 1 : 0.45 }} disabled={!editDate || !editTime} onClick={saveEdit}>Guardar alterações</button>
-            </div>
           </div>
         )}
 
