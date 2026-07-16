@@ -495,6 +495,23 @@ function App() {
       return { ok: false, error: d.error || 'Erro ao renomear' };
     })).catch(() => ({ ok: false, error: 'Erro de rede' }));
   };
+  const reorderLocalities = (orderedSlugs) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão' });
+    setRealLocalities((prev) => {
+      if (!prev) return prev;
+      const map = Object.fromEntries(prev.map((l) => [l.id, l]));
+      return orderedSlugs.map((s) => map[s]).filter(Boolean);
+    });
+    return fetch('/api/localities/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify({ order: orderedSlugs }),
+    }).then((r) => r.json().then((d) => {
+      if (r.ok) return { ok: true };
+      return { ok: false, error: d.error || 'Erro ao reordenar' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
+
   const reset = () => {
     // Preservar configuração da coordenação — o reset só reinicia o fluxo do candidato
     const coordData = {
@@ -508,7 +525,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

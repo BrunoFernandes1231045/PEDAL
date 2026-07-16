@@ -1961,19 +1961,7 @@ const NEEDS_DAYS = [
 ];
 
 function NeedsAdmin({ store }) {
-  const rawLocalities = store.realLocalities || window.PEDAL.LOCALITIES;
-  const localities = (() => {
-    try {
-      const order = JSON.parse(localStorage.getItem('pedal_loc_order') || 'null');
-      if (!order) return rawLocalities;
-      return [...rawLocalities].sort((a, b) => {
-        const ai = order.indexOf(a.id); const bi = order.indexOf(b.id);
-        if (ai === -1 && bi === -1) return 0;
-        if (ai === -1) return 1; if (bi === -1) return -1;
-        return ai - bi;
-      });
-    } catch { return rawLocalities; }
-  })();
+  const localities = store.realLocalities || window.PEDAL.LOCALITIES;
   const [table, setTable] = useStateD(() => store.realNeeds || {});
   const [saved, setSaved] = useStateD(false);
   const [saving, setSaving] = useStateD(false);
@@ -2083,19 +2071,8 @@ function LocalidadesAdmin({ store }) {
   const [editName, setEditName] = useStateD('');
   const [dragIdx, setDragIdx] = useStateD(null);
   const [dragOverIdx, setDragOverIdx] = useStateD(null);
-  const [order, setOrder] = useStateD(() => {
-    try { return JSON.parse(localStorage.getItem('pedal_loc_order') || 'null'); } catch { return null; }
-  });
 
-  const rawLocs = store.realLocalities || [];
-  const locs = order
-    ? [...rawLocs].sort((a, b) => {
-        const ai = order.indexOf(a.id); const bi = order.indexOf(b.id);
-        if (ai === -1 && bi === -1) return 0;
-        if (ai === -1) return 1; if (bi === -1) return -1;
-        return ai - bi;
-      })
-    : rawLocs;
+  const locs = store.realLocalities || [];
 
   const del = async (id) => {
     setErrors((p) => ({ ...p, [id]: '' }));
@@ -2123,9 +2100,7 @@ function LocalidadesAdmin({ store }) {
     const reordered = [...locs];
     const [moved] = reordered.splice(dragIdx, 1);
     reordered.splice(toIdx, 0, moved);
-    const newOrder = reordered.map((l) => l.id);
-    setOrder(newOrder);
-    localStorage.setItem('pedal_loc_order', JSON.stringify(newOrder));
+    store.reorderLocalities(reordered.map((l) => l.id));
     setDragIdx(null); setDragOverIdx(null);
   };
 
