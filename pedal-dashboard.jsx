@@ -378,13 +378,13 @@ function NotificationsMenu({ notifs, onClose }) {
 function OverviewSection({ ctx }) {
   const { store, candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, schedOf, setSection } = ctx;
   const S = store.S; const P = window.PEDAL;
-  const panelRef = useRefD(null);
-  const [panelH, setPanelH] = useStateD(null);
+  const funnelRef = useRefD(null);
+  const [funnelH, setFunnelH] = useStateD(null);
   useEffectD(() => {
     function measure() {
-      if (!panelRef.current) return;
-      const top = panelRef.current.getBoundingClientRect().top;
-      setPanelH(window.innerHeight - top - 24);
+      if (!funnelRef.current) return;
+      const top = funnelRef.current.getBoundingClientRect().top;
+      setFunnelH(window.innerHeight - top - 24);
     }
     measure();
     window.addEventListener('resize', measure);
@@ -440,9 +440,9 @@ function OverviewSection({ ctx }) {
       </div>
 
       {/* Funil de ponta a ponta — a toda a largura */}
-      <div ref={panelRef} className="pedal-panel" style={{ display: 'flex', flexDirection: 'column', height: panelH ? panelH + 'px' : 'auto', boxSizing: 'border-box' }}>
+      <div className="pedal-panel">
         <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Funil de captação</span><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><ExportBtn rows={inFunnel} store={store} fileId="funil-processo" /></div></div>
-        <div className="pedal-funnel" style={{ flex: 1 }}>
+        <div ref={funnelRef} className="pedal-funnel" style={funnelH ? { height: funnelH + 'px' } : {}}>
           {P.FUNNEL.map((col) => {
             let list;
             if (col.id === 'aguarda') {
