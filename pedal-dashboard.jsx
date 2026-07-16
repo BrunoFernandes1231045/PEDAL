@@ -405,6 +405,7 @@ function OverviewSection({ ctx }) {
   S.contactRequests.filter((r) => r.status === 'novo').forEach((r) => tasks.push({ key: 'ct' + r.id, name: r.name, kind: 'contacto', label: 'Dúvida do voluntário' + (r.question ? ' — “' + r.question.slice(0, 40) + (r.question.length > 40 ? '…' : '') + '”' : ''), btn: 'Responder', act: () => setSection('contactos') }));
   const kindIcon = { validar: 'doc', agendar: 'clock', confirmar: 'clock', concluir: 'check', contacto: 'chat' };
   const kindTone = { validar: 'amber', agendar: 'neutral', confirmar: 'amber', concluir: 'green', contacto: 'amber' };
+  const taskMap = Object.fromEntries(tasks.filter((t) => t.c).map((t) => [t.c.id, t]));
 
   return (
     <div>
@@ -448,16 +449,26 @@ function OverviewSection({ ctx }) {
               <div key={col.id} className="pedal-fcol">
                 <div className="pedal-kcolhead"><span>{col.label}</span><span className="pedal-kcount">{list.length}</span></div>
                 <div className="pedal-kcards">
-                  {list.map((c) => (
-                    <button key={c.id} className={'pedal-kcard' + (c.live ? ' live' : '')} onClick={() => setSel(c)}>
-                      <div className="pedal-kav">{c.initials}</div>
-                      <div style={{ minWidth: 0, textAlign: 'left' }}>
-                        <div style={{ font: '700 12.5px var(--ui)', color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
-                        <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.locality}</div>
+                  {list.map((c) => {
+                    const task = taskMap[c.id];
+                    return (
+                      <div key={c.id} className={'pedal-kcard' + (c.live ? ' live' : '')}>
+                        <button style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 9, background: 'none', border: 'none', padding: 0, cursor: 'pointer', minWidth: 0 }} onClick={() => setSel(c)}>
+                          <div className="pedal-kav">{c.initials}</div>
+                          <div style={{ minWidth: 0, textAlign: 'left' }}>
+                            <div style={{ font: '700 12.5px var(--ui)', color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+                            <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.locality}</div>
+                          </div>
+                          {c.live && <span className="pedal-livedot" title="Em direto" />}
+                        </button>
+                        {task && (
+                          <button className="pedal-taskbtn primary" style={{ padding: '5px 10px', fontSize: 11, flexShrink: 0 }} onClick={task.act}>
+                            {task.btn}
+                          </button>
+                        )}
                       </div>
-                      {c.live && <span className="pedal-livedot" title="Em direto" />}
-                    </button>
-                  ))}
+                    );
+                  })}
                   {list.length === 0 && <div className="pedal-fempty">—</div>}
                 </div>
               </div>
