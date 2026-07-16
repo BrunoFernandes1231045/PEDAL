@@ -2062,12 +2062,28 @@ function NeedsAdmin({ store }) {
 
 // Gestão de localidades activas
 function LocalidadesAdmin({ store }) {
-  const locs = store.realLocalities || [];
   const [errors, setErrors] = useStateD({});
   const [loading, setLoading] = useStateD({});
   const [newName, setNewName] = useStateD('');
   const [addErr, setAddErr] = useStateD('');
   const [adding, setAdding] = useStateD(false);
+  const [editingId, setEditingId] = useStateD(null);
+  const [editName, setEditName] = useStateD('');
+  const [dragIdx, setDragIdx] = useStateD(null);
+  const [dragOverIdx, setDragOverIdx] = useStateD(null);
+  const [order, setOrder] = useStateD(() => {
+    try { return JSON.parse(localStorage.getItem('pedal_loc_order') || 'null'); } catch { return null; }
+  });
+
+  const rawLocs = store.realLocalities || [];
+  const locs = order
+    ? [...rawLocs].sort((a, b) => {
+        const ai = order.indexOf(a.id); const bi = order.indexOf(b.id);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1; if (bi === -1) return -1;
+        return ai - bi;
+      })
+    : rawLocs;
 
   const del = async (id) => {
     setErrors((p) => ({ ...p, [id]: '' }));
@@ -2075,6 +2091,30 @@ function LocalidadesAdmin({ store }) {
     const res = await store.removeLocality(id);
     setLoading((p) => ({ ...p, [id]: false }));
     if (!res.ok) setErrors((p) => ({ ...p, [id]: res.error }));
+  };
+
+  const startEdit = (l) => { setEditingId(l.id); setEditName(l.name); setErrors((p) => ({ ...p, [l.id]: '' })); };
+  const cancelEdit = () => { setEditingId(null); setEditName(''); };
+
+  const saveEdit = async (l) => {
+    const name = editName.trim();
+    if (name.length < 2 || name === l.name) { cancelEdit(); return; }
+    setLoading((p) => ({ ...p, [l.id]: true }));
+    const res = await store.renameLocality(l.id, l.name, name);
+    setLoading((p) => ({ ...p, [l.id]: false }));
+    if (res.ok) { cancelEdit(); }
+    else setErrors((p) => ({ ...p, [l.id]: res.error }));
+  };
+
+  const handleDrop = (toIdx) => {
+    if (dragIdx === null || dragIdx === toIdx) return;
+    const reordered = [...locs];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    const newOrder = reordered.map((l) => l.id);
+    setOrder(newOrder);
+    localStorage.setItem('pedal_loc_order', JSON.stringify(newOrder));
+    setDragIdx(null); setDragOverIdx(null);
   };
 
   const add = async () => {
@@ -2095,22 +2135,45 @@ function LocalidadesAdmin({ store }) {
           <Pill tone={locs.length ? 'green' : 'amber'}>{locs.length}</Pill>
         </div>
         <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 14px' }}>
-          Só é possível eliminar uma localidade se não houver vagas abertas associadas.
+          Arrasta para reordenar. Só é possível eliminar uma localidade se não houver vagas abertas associadas.
         </p>
         {locs.length === 0 ? (
           <div className="pedal-taskempty"><Icon name="pin" size={16} color="var(--ink-soft)" />Sem localidades definidas.</div>
         ) : (
           <div style={{ display: 'grid', gap: 6 }}>
-            {locs.map((l) => (
-              <div key={l.id} style={{ display: 'grid', gap: 4 }}>
-                <div className="pedal-stationrow">
+            {locs.map((l, i) => (
+              <div key={l.id}
+                draggable={editingId !== l.id}
+                onDragStart={() => setDragIdx(i)}
+                onDragOver={(e) => { e.preventDefault(); if (dragOverIdx !== i) setDragOverIdx(i); }}
+                onDrop={(e) => { e.preventDefault(); handleDrop(i); }}
+                onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                style={{ display: 'grid', gap: 4, opacity: dragIdx === i ? 0.4 : 1, borderTop: dragOverIdx === i && dragIdx !== i ? '2px solid var(--primary)' : '2px solid transparent', transition: 'border-color .1s' }}>
+                <div className="pedal-stationrow" style={{ gap: 8 }}>
+                  <span style={{ cursor: editingId === l.id ? 'default' : 'grab', color: 'var(--ink-soft)', fontSize: 15, flexShrink: 0, userSelect: 'none' }}>⠿</span>
                   <span style={{ color: 'var(--primary)', flexShrink: 0 }}><Icon name="pin" size={16} /></span>
-                  <span style={{ flex: 1, font: '600 13.5px var(--ui)', color: 'var(--ink)' }}>{l.name}</span>
-                  <button className="pedal-iconbtn" title="Eliminar localidade" disabled={!!loading[l.id]}
-                    onClick={() => del(l.id)}>✕</button>
+                  {editingId === l.id ? (
+                    <input className="pedal-input" value={editName} autoFocus
+                      style={{ flex: 1, height: 34, fontSize: 13, padding: '0 10px' }}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(l); if (e.key === 'Escape') cancelEdit(); }} />
+                  ) : (
+                    <span style={{ flex: 1, font: '600 13.5px var(--ui)', color: 'var(--ink)' }}>{l.name}</span>
+                  )}
+                  {editingId === l.id ? (
+                    <>
+                      <button className="pedal-iconbtn" title="Guardar" disabled={!!loading[l.id]} onClick={() => saveEdit(l)} style={{ color: 'var(--primary-deep)' }}>✓</button>
+                      <button className="pedal-iconbtn" title="Cancelar" onClick={cancelEdit}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="pedal-iconbtn" title="Editar nome" onClick={() => startEdit(l)} style={{ fontSize: 15 }}>✎</button>
+                      <button className="pedal-iconbtn" title="Eliminar localidade" disabled={!!loading[l.id]} onClick={() => del(l.id)}>✕</button>
+                    </>
+                  )}
                 </div>
                 {errors[l.id] && (
-                  <div style={{ font: '500 11.5px var(--ui)', color: 'var(--accent-deep)', paddingLeft: 28 }}>{errors[l.id]}</div>
+                  <div style={{ font: '500 11.5px var(--ui)', color: 'var(--accent-deep)', paddingLeft: 40 }}>{errors[l.id]}</div>
                 )}
               </div>
             ))}

@@ -474,6 +474,27 @@ function App() {
       return r.json().then((d) => ({ ok: false, error: d.error || 'Erro ao eliminar' }));
     }).catch(() => ({ ok: false, error: 'Erro de rede' }));
   };
+  const renameLocality = (id, oldName, newName) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão' });
+    return fetch(`/api/localities/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify({ name: newName }),
+    }).then((r) => r.json().then((d) => {
+      if (r.ok) {
+        setRealLocalities((prev) => (prev || []).map((l) => l.id === id ? { ...l, name: newName } : l));
+        setRealCandidates((prev) => prev ? prev.map((c) => ({
+          ...c,
+          locality: c.locality === oldName ? newName : c.locality,
+          localities: c.localities ? c.localities.map((loc) => loc === oldName ? newName : loc) : c.localities,
+        })) : prev);
+        setRealTrainers((prev) => prev ? prev.map((t) => t.locality === oldName ? { ...t, locality: newName } : t) : prev);
+        setRealStations((prev) => prev ? prev.map((s) => s.locality === oldName ? { ...s, locality: newName } : s) : prev);
+        return { ok: true };
+      }
+      return { ok: false, error: d.error || 'Erro ao renomear' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
   const reset = () => {
     // Preservar configuração da coordenação — o reset só reinicia o fluxo do candidato
     const coordData = {
@@ -487,7 +508,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;
