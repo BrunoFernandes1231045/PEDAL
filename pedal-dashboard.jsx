@@ -445,7 +445,12 @@ function OverviewSection({ ctx }) {
             } else {
               list = candidates.filter((c) => P.funnelCol(c.stage) === col.id);
             }
-            list = [...list].sort((a, b) => (P.stageIndex(b.stage) - P.stageIndex(a.stage)) || ((b.days || 0) - (a.days || 0)));
+            if (col.id === 'aguarda') {
+              const schedRank = (st) => ({ aguarda_candidato: 1, aguarda_telefone: 2, aguarda_coordenacao: 3, candidato_propoe: 3 }[st] || 0);
+              list = [...list].sort((a, b) => (schedRank(getSchedStatus(schedOf(a))) - schedRank(getSchedStatus(schedOf(b)))) || ((b.days || 0) - (a.days || 0)));
+            } else {
+              list = [...list].sort((a, b) => (P.stageIndex(a.stage) - P.stageIndex(b.stage)) || ((b.days || 0) - (a.days || 0)));
+            }
             return (
               <div key={col.id} className="pedal-fcol">
                 <div className="pedal-kcolhead"><span>{col.label}</span><span className="pedal-kcount">{list.length}</span></div>
