@@ -113,7 +113,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'await_reschedule': return [{ text: 'Em breve a coordenação envia-te novas datas para a formação prática. 🗓️' }];
       case 'formalize': {
         const F = P.FORMALIZATION;
-        return [{ text: F.intro }, { text: 'Lê os termos abaixo, indica o teu NIF para o seguro, aceita e assina com o dedo. Demora um instante. ✍️' }];
+        return [{ text: F.intro }, { text: 'Lê os termos abaixo, aceita e assina com o dedo. Demora um instante. ✍️' }];
       }
       case 'active_home': return [{ text: `Olá${first ? ', ' + first : ''}! 🙌 Já és piloto ativo — que bom!` }, { text: 'O meu papel termina aqui. Daqui em diante é o teu coach que organiza os passeios e o dia a dia. Comigo continuas a poder rever a formação e tirar dúvidas sobre a Pedalar Sem Idade.' }];
       case 'rejected': {
