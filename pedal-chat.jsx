@@ -70,19 +70,17 @@ function ChatView({ store, tone = 'caloroso' }) {
         const closedWithAlts = closed
           .map((l) => ({ l, alts: P.needAlternatives(store.realNeeds || [], l.name) }))
           .filter((x) => x.alts.length > 0);
-        const altPrompt = closedWithAlts.length ? [
-          { text: closedWithAlts.length === 1
-            ? `Em ${closedWithAlts[0].l.name} há vaga a: ${P.fmtAlternatives(closedWithAlts[0].alts)}.`
-            : closedWithAlts.map((x) => `Em ${x.l.name}: ${P.fmtAlternatives(x.alts)}`).join('. ') + '.' },
-          { text: 'Queres alterar a tua disponibilidade para uma destas opções?' },
-        ] : [];
+        const altsLine = closedWithAlts.length ? [{ text: closedWithAlts.length === 1
+          ? `Em ${closedWithAlts[0].l.name} há vaga a: ${P.fmtAlternatives(closedWithAlts[0].alts)}.`
+          : closedWithAlts.map((x) => `Em ${x.l.name}: ${P.fmtAlternatives(x.alts)}`).join('. ') + '.' }] : [];
         if (open.length && closed.length) {
           // Caso misto: algumas zonas com vaga, outras sem
           const openLabel = open.length === 1 ? names(open) : `${names(open)}`;
           return [
             { text: `Há procura de pilotos em ${names(open)} compatível com a tua disponibilidade! 🎉` },
             { text: `Em ${names(closed)} não há vaga compatível neste momento. 🙏 Ficam em lista de espera — avisamos-te se abrir vaga.` },
-            ...altPrompt,
+            ...altsLine,
+            ...(closedWithAlts.length ? [{ text: 'Queres alterar a tua disponibilidade para uma destas opções?' }] : []),
             { text: `Queres avançar com ${openLabel}, ou preferes escolher outras zonas?` },
           ];
         }
@@ -94,8 +92,10 @@ function ChatView({ store, tone = 'caloroso' }) {
         }
         return [
           { text: `Neste momento não há vaga compatível em ${names(closed)} com a tua disponibilidade. 🙏` },
-          ...altPrompt,
-          { text: 'Ficaste automaticamente em lista de espera — avisamos-te assim que surgir uma necessidade compatível na tua zona. 💛' },
+          ...altsLine,
+          { text: closedWithAlts.length
+            ? 'Por agora ficas em lista de espera nesta zona — avisamos-te assim que surgir uma necessidade compatível, ou podes já alterar a tua disponibilidade para uma destas opções. 💛'
+            : 'Ficaste automaticamente em lista de espera — avisamos-te assim que surgir uma necessidade compatível na tua zona. 💛' },
         ];
       }
       case 'waitlisted': return [{ text: 'Combinado, ficas na nossa lista! 💛 Entretanto posso esclarecer dúvidas — ou ligo-te à equipa quando quiseres.' }];
