@@ -409,9 +409,14 @@ function ProfileForm({ onSubmit }) {
 
 // Triagem: localidade(s) + disponibilidade por dia×período (RF-07)
 // locAvail: { [locId]: { [dayId]: periodId | null } }
-function TriageForm({ localities, onSubmit }) {
+function TriageForm({ localities, initial, onSubmit }) {
   const P = window.PEDAL;
-  const [locAvail, setLocAvail] = useState({});
+  const buildInitial = () => {
+    const out = {};
+    (initial || []).forEach((a) => { out[a.localityId] = { ...(out[a.localityId] || {}), [a.day]: a.period }; });
+    return out;
+  };
+  const [locAvail, setLocAvail] = useState(buildInitial);
   const [openLoc, setOpenLoc] = useState(null);
 
   const getAvail = (locId) => locAvail[locId] || {};

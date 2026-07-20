@@ -66,12 +66,23 @@ function ChatView({ store, tone = 'caloroso' }) {
         const open = r.open || [];
         const closed = r.closed || [];
         const names = (arr) => arr.map((l) => l.name).join(', ');
+        // Para cada zona sem vaga, vê se essa mesma localidade tem outros dias/períodos com necessidade aberta
+        const closedWithAlts = closed
+          .map((l) => ({ l, alts: P.needAlternatives(store.realNeeds || [], l.name) }))
+          .filter((x) => x.alts.length > 0);
+        const altPrompt = closedWithAlts.length ? [
+          { text: closedWithAlts.length === 1
+            ? `Em ${closedWithAlts[0].l.name} há vaga a: ${P.fmtAlternatives(closedWithAlts[0].alts)}.`
+            : closedWithAlts.map((x) => `Em ${x.l.name}: ${P.fmtAlternatives(x.alts)}`).join('. ') + '.' },
+          { text: 'Queres alterar a tua disponibilidade para uma destas opções?' },
+        ] : [];
         if (open.length && closed.length) {
           // Caso misto: algumas zonas com vaga, outras sem
           const openLabel = open.length === 1 ? names(open) : `${names(open)}`;
           return [
             { text: `Há procura de pilotos em ${names(open)} compatível com a tua disponibilidade! 🎉` },
             { text: `Em ${names(closed)} não há vaga compatível neste momento. 🙏 Ficam em lista de espera — avisamos-te se abrir vaga.` },
+            ...altPrompt,
             { text: `Queres avançar com ${openLabel}, ou preferes escolher outras zonas?` },
           ];
         }
@@ -83,6 +94,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         }
         return [
           { text: `Neste momento não há vaga compatível em ${names(closed)} com a tua disponibilidade. 🙏` },
+          ...altPrompt,
           { text: 'Ficaste automaticamente em lista de espera — avisamos-te assim que surgir uma necessidade compatível na tua zona. 💛' },
         ];
       }
@@ -149,16 +161,18 @@ function ChatView({ store, tone = 'caloroso' }) {
         const r = triageResultRef.current || {};
         const anyOpen = (r.open && r.open.length > 0);
         const anyClosed = (r.closed && r.closed.length > 0);
+        const hasAlts = anyClosed && r.closed.some((l) => P.needAlternatives(store.realNeeds || [], l.name).length > 0);
+        const changeLabel = hasAlts ? 'Alterar disponibilidade' : 'Escolher outras zonas';
         if (anyOpen && anyClosed) {
           const openLabel = r.open.length === 1 ? r.open[0].name : 'as zonas disponíveis';
           return { type: 'quick', options: [
             { label: `Continuar com ${openLabel} →`, go: 'interview', accent: 'fill' },
-            { label: 'Escolher outras zonas', go: 'triage' },
+            { label: changeLabel, go: 'triage' },
           ]};
         }
         return anyOpen
           ? { type: 'quick', options: [{ label: 'Começar questionário →', go: 'interview', accent: 'fill' }, { label: 'Tenho uma dúvida', action: 'askPedal' }] }
-          : { type: 'quick', options: [{ label: 'Escolher outras zonas', go: 'triage' }] };
+          : { type: 'quick', options: [{ label: changeLabel, go: 'triage' }] };
       }
       case 'interview': return stepInteraction((S.chat && S.chat.interviewStep) || 0);
       case 'await_validation': return { type: 'note', text: '⏳ A aguardar a validação da coordenação… Recebes aviso aqui assim que a tua candidatura for aprovada.' };
@@ -593,7 +607,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       addMessage({ from: 'agent', id: uidC(), card: 'credentials' });
       enterNode('triage');
     }} />;
-    if (it.type === 'triage') return <TriageForm localities={allLocalities} onSubmit={(d) => {
+    if (it.type === 'triage') return <TriageForm localities={allLocalities} initial={S.candidate.availability} onSubmit={(d) => {
       patchCandidate({ localities: d.localities, locality: d.locality, periods: d.periods, availability: d.availability });
       setStage('triagem');
       // Compute match NOW with fresh d.periods — S.candidate is still stale (async React update)

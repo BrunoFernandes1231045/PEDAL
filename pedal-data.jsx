@@ -51,6 +51,27 @@ PEDAL.needMatch = function (schedule, localityName, periods) {
   return cand.some((p) => covered.has(p));
 };
 
+PEDAL.DAY_PT = { segunda: 'Segunda', terca: 'Terça', quarta: 'Quarta', quinta: 'Quinta', sexta: 'Sexta', sabado: 'Sábado', domingo: 'Domingo' };
+
+// Todos os dias/períodos com necessidade aberta nesta localidade (para sugerir alternativas
+// a um candidato cuja disponibilidade escolhida não teve vaga).
+PEDAL.needAlternatives = function (schedule, localityName) {
+  if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return [];
+  const locData = schedule[(localityName || '')];
+  if (!locData) return [];
+  const DAYS = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+  return DAYS.filter((day) => locData[day] && locData[day].period).map((day) => ({ day, period: locData[day].period }));
+};
+
+// Texto legível para uma lista de alternativas, ex.: "Segunda de manhã e Terça de tarde"
+PEDAL.fmtAlternatives = function (alts) {
+  const perName = (p) => (p === 'ambos' ? 'manhã e tarde' : p === 'manha' ? 'manhã' : 'tarde');
+  const parts = (alts || []).map((a) => `${PEDAL.DAY_PT[a.day] || a.day} de ${perName(a.period)}`);
+  if (!parts.length) return '';
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`;
+};
+
 // ── Base de conhecimento / FAQ validada (RF-23 a RF-28) ──────────────
 // keywords sem acentos, em minúsculas, para correspondência simples.
 PEDAL.FAQ = [
