@@ -6,7 +6,7 @@ const { useState: useStateCF, useRef: useRefCF } = React;
 // ── Modal: confirmar conclusão ou rejeitar o piloto na formação prática ──
 function PracticalCompleteModal({ c, store, onClose, startEditing }) {
   const P = window.PEDAL;
-  const sc = store.S.scheduling[c.id] || c.scheduling || {};
+  const sc = resolveSched(store.S.scheduling[c.id], c.scheduling) || {};
   const slots = sc.slots || [];
   const slot = slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? slots[sc.chosen] : null);
   const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;

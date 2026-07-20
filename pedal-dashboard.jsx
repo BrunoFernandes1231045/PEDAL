@@ -61,6 +61,17 @@ function timeAgo(iso) {
   return `há ${Math.floor(h / 24)} d`;
 }
 
+// Reconcilia o agendamento local (otimista, feedback instantâneo das próprias acções
+// da coordenação) com o do backend (pode ter avançado por acção do candidato noutro
+// dispositivo). Ganha quem estiver mais à frente no fluxo — nunca o local "às cegas",
+// senão uma proposta antiga guardada localmente esconde para sempre a resposta do candidato.
+function resolveSched(local, api) {
+  if (!local) return api || null;
+  if (!api) return local;
+  const rank = (sc) => ({ aguarda_candidato: 1, aguarda_coordenacao: 2, candidato_propoe: 2, aguarda_telefone: 3, confirmado: 4 }[sc && sc.status] || 0);
+  return rank(api) > rank(local) ? api : local;
+}
+
 function getSchedStatus(sc) {
   if (!sc || !sc.slots || !sc.slots.length) return null;
   if (sc.status) return sc.status;
@@ -1051,7 +1062,7 @@ function exportCandidates(rows, store, fileId) {
   const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const lines = [cols.join(';')];
   rows.forEach((c) => {
-    const sc = store.S.scheduling[c.id] || c.scheduling || null;
+    const sc = resolveSched(store.S.scheduling[c.id], c.scheduling);
     const ag = sc && sc.chosen != null && sc.slots && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
     const trainer = sc && sc.trainerId ? ((store.realTrainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
     // disponibilidade: usa availability (dia+período) se disponível, senão periods
@@ -1325,7 +1336,7 @@ function RoleSelect({ value, onChange }) {
 
 function SchedulingModal({ c, store, onClose }) {
   const P = window.PEDAL;
-  const sc = store.S.scheduling[c.id] || c.scheduling || {};
+  const sc = resolveSched(store.S.scheduling[c.id], c.scheduling) || {};
   const existing = sc.slots || [];
   const [rows, setRows] = useStateD(() => [0, 1, 2].map((i) => {
     const ex = existing[i] || {};
@@ -1444,7 +1455,7 @@ function SchedulingModal({ c, store, onClose }) {
 
 function SlotReviewModal({ c, store, onClose }) {
   const P = window.PEDAL;
-  const sc = store.S.scheduling[c.id] || c.scheduling || {};
+  const sc = resolveSched(store.S.scheduling[c.id], c.scheduling) || {};
   const slots = sc.slots || [];
   const status = sc.status || '';
   const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
@@ -1821,7 +1832,7 @@ function CandidateDetail({ c, store, onClose }) {
         )}
 
         {(() => {
-          const sc2 = store.S.scheduling[c.id] || c.scheduling;
+          const sc2 = resolveSched(store.S.scheduling[c.id], c.scheduling);
           if (!sc2 || !((sc2.slots && sc2.slots.length) || sc2.trainerId)) return null;
           const chosen = sc2.chosen != null && sc2.slots ? sc2.slots[sc2.chosen] : null;
           const tr = sc2.trainerId ? (store.realTrainers || []).find((t) => t.id === sc2.trainerId) : null;
