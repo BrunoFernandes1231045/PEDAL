@@ -142,7 +142,13 @@ function Dashboard({ store }) {
   useEffectD(() => {
     const wrap = document.querySelector('.pedal-dashwrap');
     if (!wrap) return;
-    wrap.style.overflowY = (screen === 'operacao' && section === 'geral') ? 'hidden' : '';
+    function apply() {
+      const isMobile = window.innerWidth <= 760;
+      wrap.style.overflowY = (!isMobile && screen === 'operacao' && section === 'geral') ? 'hidden' : '';
+    }
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
   }, [screen, section]);
 
   // candidato em direto (a partir do chat)
@@ -453,6 +459,7 @@ function OverviewSection({ ctx }) {
   useEffectD(() => {
     function measure() {
       if (!funnelRef.current) return;
+      if (window.innerWidth <= 760) { setFunnelH(null); return; }
       const top = funnelRef.current.getBoundingClientRect().top;
       setFunnelH(window.innerHeight - top - 24);
     }
