@@ -38,14 +38,17 @@ function AuthGate({ store }) {
       const profile = await meRes.json();
 
       const STAGE_TO_NODE = { inscricao: 'triage', apresentacao: 'present', triagem: 'triage_result', espera: 'await_waitinglist', entrevista: 'interview', validacao: 'await_validation', onboarding: 'goto_onboarding', pratica: 'await_reschedule', ativo: 'active_home' };
-      const node = (store.S.chat && store.S.chat.node) || STAGE_TO_NODE[profile.stage] || 'triage';
+      // O nó gravado no backend é a fonte de verdade (persiste entre sessões/dispositivos);
+      // só cai para o nó genérico do estágio se este candidato nunca gravou um nó.
+      const node = profile.chat_node || STAGE_TO_NODE[profile.stage] || 'triage';
       const perData = window.PEDAL && window.PEDAL.PERIODS;
       const locs = window.PEDAL && window.PEDAL.LOCALITIES;
       const periods = profile.periods ? profile.periods.split(', ').filter(Boolean).map((n) => { const f = perData && perData.find((p) => p.name === n); return f ? f.id : n; }) : [];
       const localities = profile.locality ? profile.locality.split(', ').filter(Boolean).map((n) => { const f = locs && locs.find((l) => l.name === n); return f ? f.id : n; }) : [];
+      const availability = Array.isArray(profile.availability) ? profile.availability : [];
       const savedMessages = Array.isArray(profile.chat_messages) && profile.chat_messages.length ? profile.chat_messages : [];
       store.up({ candidateId: profile.id, account: { email: email.trim(), password: pw.trim() }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
-      store.patchCandidate({ name: profile.name || '', email: profile.email || '', dob: profile.dob || '', contact: profile.phone || '', cc: profile.cc || '', localities, periods });
+      store.patchCandidate({ name: profile.name || '', email: profile.email || '', dob: profile.dob || '', contact: profile.phone || '', cc: profile.cc || '', localities, periods, availability });
       store.setStage(profile.stage || 'inscricao');
       if (profile.scheduling && profile.scheduling.slots && profile.scheduling.slots.length) {
         store.setScheduling('live', profile.scheduling);
@@ -177,10 +180,10 @@ function LoginPanel({ store }) {
         pratica: 'await_reschedule',
         ativo: 'active_home',
       };
-      // Prefer the node already saved in localStorage (set when the user last interacted);
-      // fall back to STAGE_TO_NODE only when no existing node is known.
+      // O nó gravado no backend é a fonte de verdade (persiste entre sessões/dispositivos);
+      // só cai para o nó genérico do estágio se este candidato nunca gravou um nó.
       const stageNode = STAGE_TO_NODE[profile.stage] || 'triage';
-      const node = (store.S.chat && store.S.chat.node) || stageNode;
+      const node = profile.chat_node || stageNode;
 
       // Tenta recuperar IDs a partir dos nomes guardados na BD
       const perData = window.PEDAL && window.PEDAL.PERIODS;
