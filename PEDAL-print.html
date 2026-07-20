@@ -259,6 +259,7 @@ input{font-family:inherit;}
 .pedal-navbadge{display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:99px; background:var(--accent-deep); color:#fff; font:800 10.5px var(--ui);}
 .pedal-coordtab.on .pedal-navbadge{background:rgba(255,255,255,.28);}
 .pedal-searchwrap{position:relative; display:flex; align-items:center; gap:7px; padding:9px 14px; border-radius:11px; border:1px solid var(--line); background:var(--surface); min-width:220px; margin-left:auto;}
+.pedal-searchbtn{display:flex; align-items:center; flex-shrink:0; padding:0;}
 .pedal-searchwrap:focus-within{border-color:var(--primary);}
 .pedal-searchinput{flex:1; min-width:0; border:none; outline:none; background:none; font:600 13px var(--ui); color:var(--ink);}
 .pedal-searchinput::placeholder{color:var(--ink-soft); font-weight:500;}
@@ -412,12 +413,19 @@ input{font-family:inherit;}
 .pedal-qainput{display:flex; gap:8px; margin-top:12px;}
 
 @media (max-width:760px){
+  .pedal-dash{padding:16px 14px;}
   .pedal-metrics{grid-template-columns:repeat(2,1fr);}
   .pedal-dashgrid{grid-template-columns:1fr;}
   .pedal-opsgrid{grid-template-columns:1fr;}
   .pedal-gestao{grid-template-columns:1fr;}
   .pedal-statgrid{grid-template-columns:repeat(2,1fr);}
   .pedal-tasksgrid{grid-template-columns:1fr;}
+  .pedal-detailgrid{grid-template-columns:1fr;}
+  .pedal-barlbl{width:96px; font-size:11px;}
+  .pedal-searchwrap{min-width:0; flex:1 1 160px; margin-left:0;}
+  .pedal-funnel{grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:82vw; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .pedal-topnav{max-width:100%; overflow-x:auto;}
+  .pedal-topnav button{padding:7px 10px; font-size:12px; gap:5px; white-space:nowrap;}
   .pedal-brandmini span{display:none;}
 }
 </style>

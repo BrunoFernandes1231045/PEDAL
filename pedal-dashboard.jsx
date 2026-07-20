@@ -48,6 +48,19 @@ function AvailabilityGrid({ value, onChange, readOnly }) {
   );
 }
 
+function normText(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function timeAgo(iso) {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return 'agora mesmo';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  return `há ${Math.floor(h / 24)} d`;
+}
+
 function getSchedStatus(sc) {
   if (!sc || !sc.slots || !sc.slots.length) return null;
   if (sc.status) return sc.status;
@@ -84,58 +97,25 @@ function pendingTaskFor(c, { schedOf, setSel, setSchedFor, setSlotReviewFor, set
   return null;
 }
 
-// ── Pesquisa rápida de candidatos (barra de pesquisa por nome) ──────
-function CandidateSearch({ candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, schedOf }) {
-  const P = window.PEDAL;
-  const [q, setQ] = useStateD('');
-  const [open, setOpen] = useStateD(false);
-  const wrapRef = useRefD(null);
-  const taskCtx = { schedOf, setSel, setSchedFor, setSlotReviewFor, setCompleteFor };
+// ── Pesquisa de candidatos — filtra o funil pelo nome (Enter ou clique na lupa) ──
+function CandidateSearch({ value, onSubmit }) {
+  const [draft, setDraft] = useStateD(value || '');
 
-  useEffectD(() => {
-    const onDocClick = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, []);
-
-  const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const query = norm(q).trim();
-  const results = query ? candidates.filter((c) => c.stage !== 'rejeitado' && norm(c.name).includes(query)).slice(0, 8) : [];
-
-  const pick = (c, task) => {
-    if (task) task.act(); else setSel(c);
-    setQ(''); setOpen(false);
-  };
+  const submit = () => onSubmit(draft.trim());
+  const change = (v) => { setDraft(v); if (!v.trim()) onSubmit(''); };
 
   return (
-    <div className="pedal-searchwrap" ref={wrapRef}>
-      <Icon name="search" size={15} color="var(--ink-soft)" />
+    <div className="pedal-searchwrap">
+      <button type="button" className="pedal-searchbtn" onClick={submit} title="Pesquisar">
+        <Icon name="search" size={15} color="var(--ink-soft)" />
+      </button>
       <input
         className="pedal-searchinput"
-        placeholder="Pesquisar candidato…"
-        value={q}
-        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); setOpen(false); } }}
+        placeholder="Pesquisar candidato… (Enter)"
+        value={draft}
+        onChange={(e) => change(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') { setDraft(''); onSubmit(''); } }}
       />
-      {open && query && (
-        <div className="pedal-searchdrop">
-          {results.length === 0 ? (
-            <div className="pedal-searchempty">Sem resultados para "{q}".</div>
-          ) : results.map((c) => {
-            const task = pendingTaskFor(c, taskCtx);
-            return (
-              <button key={c.id} className="pedal-searchitem" onClick={() => pick(c, task)}>
-                <div className="pedal-kav">{c.initials}</div>
-                <div style={{ minWidth: 0, textAlign: 'left' }}>
-                  <div style={{ font: '700 12.5px var(--ui)', color: 'var(--ink)' }}>{c.name}</div>
-                  <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>{P.stageLabel(c.stage)}{task ? ' · ' + task.label : ''}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -157,6 +137,7 @@ function Dashboard({ store }) {
   const [profileOpen, setProfileOpen] = useStateD(false);
   const [notifOpen, setNotifOpen] = useStateD(false);
   const [profileModal, setProfileModal] = useStateD(null); // 'edit' | 'pw' | null
+  const [funnelSearch, setFunnelSearch] = useStateD(''); // filtro por nome no funil de captação
 
   useEffectD(() => {
     const wrap = document.querySelector('.pedal-dashwrap');
@@ -208,16 +189,20 @@ function Dashboard({ store }) {
   const cPratica = candidates.filter((c) => c.stage === 'pratica').length;
   const cVal = candidates.filter((c) => c.stage === 'validacao').length;
   const cAtivo = candidates.filter((c) => c.stage === 'ativo').length;
-  const cContact = S.contactRequests.filter((r) => r.status === 'novo').length;
+  const cContact = (store.realContactRequests || []).filter((r) => r.status === 'pending').length;
 
   const opsNav = [
     { id: 'contactos', label: 'Pedidos de contacto', icon: 'phone', badge: cContact },
   ];
 
-  const ctx = { store, candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, validate, schedOf, setScreen, setSection, readOnly, allowedGestao, coordRole };
+  const ctx = { store, candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, validate, schedOf, setScreen, setSection, readOnly, allowedGestao, coordRole, funnelSearch };
   const cp = store.coordProfile || {};
   const cpInit = (cp.name || 'MC').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
-  const notifs = [...S.notifs.map((n) => ({ ...n, who: n.who || (S.candidate.name || 'Novo candidato'), live: true })), ...P.SEED_NOTIFS];
+  const notifs = (store.realNotifs || []).map((n) => ({
+    ...n,
+    who: n.who || (candidates.find((c) => c.id === n.candidate_id) || {}).name || 'Candidato',
+    ago: timeAgo(n.created_at),
+  }));
 
   return (
     <div className="pedal-dash">
@@ -266,7 +251,7 @@ function Dashboard({ store }) {
                 {n.badge > 0 && <span className="pedal-navbadge">{n.badge}</span>}
               </button>
             ))}
-            <CandidateSearch candidates={candidates} setSel={setSel} setSchedFor={setSchedFor} setSlotReviewFor={setSlotReviewFor} setCompleteFor={setCompleteFor} schedOf={schedOf} />
+            <CandidateSearch value={funnelSearch} onSubmit={setFunnelSearch} />
           </div>
           {section === 'geral' && <OverviewSection ctx={ctx} />}
           {section === 'espera' && <WaitingList ctx={ctx} />}
@@ -448,7 +433,7 @@ function NotificationsMenu({ notifs, onClose }) {
                   <div className={'pedal-feedic ' + meta.tone}><Icon name={meta.icon} size={15} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ font: '600 12.5px/1.4 var(--ui)', color: 'var(--ink)' }}><strong style={{ fontWeight: 800 }}>{n.who}</strong> {n.text}</div>
-                    <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginTop: 2 }}>{meta.verb} · {n.live ? 'agora mesmo' : n.ago}</div>
+                    <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginTop: 2 }}>{meta.verb} · {n.ago}</div>
                   </div>
                 </div>
               );
@@ -461,7 +446,7 @@ function NotificationsMenu({ notifs, onClose }) {
 }
 
 function OverviewSection({ ctx }) {
-  const { store, candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, schedOf, setSection } = ctx;
+  const { store, candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, schedOf, setSection, funnelSearch } = ctx;
   const S = store.S; const P = window.PEDAL;
   const funnelRef = useRefD(null);
   const [funnelH, setFunnelH] = useStateD(null);
@@ -482,17 +467,13 @@ function OverviewSection({ ctx }) {
     { label: 'Pilotos ativos', value: candidates.filter((c) => c.stage === 'ativo').length, icon: 'sparkle', tone: 'green', section: 'ativos' },
   ];
 
-  // central única de tarefas que requerem decisão manual
-  const tasks = [];
+  // tarefas pendentes por candidato — usadas para o botão de ação nos cartões do funil
   const taskCtx = { schedOf, setSel, setSchedFor, setSlotReviewFor, setCompleteFor };
-  candidates.filter((c) => c.stage === 'validacao' || c.stage === 'pratica').forEach((c) => {
-    const t = pendingTaskFor(c, taskCtx);
-    if (t) tasks.push({ key: t.kind + c.id, c, ...t });
-  });
-  S.contactRequests.filter((r) => r.status === 'novo').forEach((r) => tasks.push({ key: 'ct' + r.id, name: r.name, kind: 'contacto', label: 'Dúvida do voluntário' + (r.question ? ' — “' + r.question.slice(0, 40) + (r.question.length > 40 ? '…' : '') + '”' : ''), btn: 'Responder', act: () => setSection('contactos') }));
-  const kindIcon = { validar: 'doc', agendar: 'clock', confirmar: 'clock', concluir: 'check', contacto: 'chat' };
-  const kindTone = { validar: 'amber', agendar: 'neutral', confirmar: 'amber', concluir: 'green', contacto: 'amber' };
-  const taskMap = Object.fromEntries(tasks.filter((t) => t.c).map((t) => [t.c.id, t]));
+  const taskMap = Object.fromEntries(
+    candidates.filter((c) => c.stage === 'validacao' || c.stage === 'pratica')
+      .map((c) => [c.id, pendingTaskFor(c, taskCtx)])
+      .filter(([, t]) => t)
+  );
 
   return (
     <div>
@@ -513,7 +494,13 @@ function OverviewSection({ ctx }) {
 
       {/* Funil de ponta a ponta — a toda a largura */}
       <div className="pedal-panel">
-        <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Funil de captação</span><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><ExportBtn rows={inFunnel} store={store} fileId="funil-processo" /></div></div>
+        <div className="pedal-panelhead">
+          <span style={{ font: '700 14px var(--display)', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            Funil de captação
+            {funnelSearch && <Pill tone="amber">filtrado por "{funnelSearch}"</Pill>}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><ExportBtn rows={inFunnel} store={store} fileId="funil-processo" /></div>
+        </div>
         <div ref={funnelRef} className="pedal-funnel" style={funnelH ? { height: funnelH + 'px' } : {}}>
           {P.FUNNEL.map((col) => {
             let list;
@@ -534,6 +521,10 @@ function OverviewSection({ ctx }) {
               });
             } else {
               list = candidates.filter((c) => P.funnelCol(c.stage) === col.id);
+            }
+            if (funnelSearch) {
+              const nq = normText(funnelSearch);
+              list = list.filter((c) => normText(c.name).includes(nq));
             }
             if (col.id === 'aguarda') {
               const schedRank = (st) => ({ aguarda_candidato: 1, aguarda_coordenacao: 2, candidato_propoe: 3, aguarda_telefone: 4 }[st] || 0);
@@ -1113,8 +1104,19 @@ function ExportMenu({ candidates, store }) {
 
 // ── Pedidos de contacto (encaminhamento PEDAL → humano) ─────────────
 function ContactRequests({ ctx }) {
-  const { store } = ctx;
-  const reqs = store.S.contactRequests;
+  const { store, candidates } = ctx;
+  const P = window.PEDAL;
+  const reqs = (store.realContactRequests || []).map((r) => {
+    const c = candidates.find((x) => x.id === r.candidate_id) || {};
+    const mod = r.module_id ? (P.MODULES || []).find((m) => m.id === r.module_id) : null;
+    return {
+      id: r.id, status: r.status === 'answered' ? 'resolvido' : 'novo',
+      name: c.name || 'Voluntário', contact: c.contact || '', email: c.email || '',
+      question: r.question, answer: r.answer, answeredBy: r.answered_by,
+      moduleId: r.module_id, moduleTitle: mod ? mod.title : null,
+      live: true, ago: timeAgo(r.created_at),
+    };
+  });
   const novos = reqs.filter((r) => r.status === 'novo');
   const ordered = [...novos, ...reqs.filter((r) => r.status !== 'novo')];
   const [openReply, setOpenReply] = useStateD(null);
@@ -2478,7 +2480,7 @@ function AnalyticsScreen({ ctx }) {
   const inLocality = (c, name) => !!(c.locality && c.locality.includes(name));
   const byLoc = allLocs.map((l) => ({ label: l.name, n: candidates.filter((c) => c.localityId === l.id || inLocality(c, l.name)).length })).sort((a, b) => b.n - a.n);
   // conversas & tópicos (ilustrativo a partir da base de conhecimento + pedidos)
-  const conversas = total + (store.S.contactRequests || []).length;
+  const conversas = total + (store.realContactRequests || []).length;
   // tópicos mais consultados — agregados por categoria (sem duplicados)
   const topicos = (() => {
     const seen = []; const out = [];

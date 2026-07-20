@@ -17,6 +17,7 @@ const INITIAL = {
   overrides: {},    // { [candidateId]: stage } — decisões da coordenação sobre candidatos seed
   trainers: (window.PEDAL && window.PEDAL.SEED_TRAINERS || []).map((t) => ({ ...t })),
   contactRequests: (window.PEDAL && window.PEDAL.SEED_CONTACTS || []).map((c) => ({ ...c })),
+  answeredContactIds: [], // ids (Supabase) de dúvidas já mostradas no chat, para nunca duplicar
   candidateId: null,        // ID do candidato no backend (Supabase)
   account: null,            // { email, password, createdAt } — criada após a inscrição
   emailVerificationRequired: false, // true quando EMAIL_VERIFICATION=true no backend
@@ -61,6 +62,8 @@ function App() {
   const [introVideoUrl, setIntroVideoUrl] = useStateA(null);
   const [realStations, setRealStations] = useStateA(null);
   const [realLocalities, setRealLocalities] = useStateA(null);
+  const [realNotifs, setRealNotifs] = useStateA(null);
+  const [realContactRequests, setRealContactRequests] = useStateA(null);
   const [candidateJwt, setCandidateJwtRaw] = useStateA(null);
   const [chatLoaded, setChatLoaded] = useStateA(false);
   const msgSyncTimer = useRefA();
@@ -237,7 +240,17 @@ function App() {
   const addMessage = (m) => setS((p) => ({ ...p, messages: [...p.messages, { id: m.id || ('m' + Math.random().toString(36).slice(2, 9)), ...m }] }));
   const patchCandidate = (c) => setS((p) => ({ ...p, candidate: { ...p.candidate, ...c } }));
   const setStage = (stage) => setS((p) => ({ ...p, stage }));
-  const notify = (n) => setS((p) => ({ ...p, notifs: [{ id: 'n' + Math.random().toString(36).slice(2, 8), ts: Date.now(), ...n }, ...p.notifs] }));
+  const notify = (n) => {
+    setS((p) => ({ ...p, notifs: [{ id: 'n' + Math.random().toString(36).slice(2, 8), ts: Date.now(), ...n }, ...p.notifs] }));
+    const jwt = candidateJwt || coordJwt;
+    if (jwt) {
+      fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+        body: JSON.stringify({ type: n.type, who: n.who || null, text: n.text, candidate_id: S.candidateId || null }),
+      }).catch(() => {});
+    }
+  };
   const setOnboarding = (o) => setS((p) => ({ ...p, onboarding: { ...p.onboarding, ...o } }));
   const setChat = (c) => setS((p) => ({ ...p, chat: { ...p.chat, ...c } }));
   const up = (patch) => setS((p) => ({ ...p, ...patch }));
@@ -261,36 +274,89 @@ function App() {
       headers: { 'Authorization': `Bearer ${coordJwt}` },
     }).then((r) => { if (r.ok) setRealTrainers((prev) => (prev || []).filter((t) => t.id !== id)); }).catch(() => {});
   };
-  const addContactRequest = (r) => setS((p) => ({ ...p, contactRequests: [{ id: 'cr' + Math.random().toString(36).slice(2, 8), ago: 'agora mesmo', status: 'novo', ...r }, ...p.contactRequests] }));
-  const resolveContact = (id) => setS((p) => ({ ...p, contactRequests: p.contactRequests.map((c) => (c.id === id ? { ...c, status: 'resolvido' } : c)) }));
+  const addContactRequest = (r) => {
+    setS((p) => ({ ...p, contactRequests: [{ id: 'cr' + Math.random().toString(36).slice(2, 8), ago: 'agora mesmo', status: 'novo', ...r }, ...p.contactRequests] }));
+    if (S.candidateId && candidateJwt) {
+      fetch('/api/contact-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${candidateJwt}` },
+        body: JSON.stringify({ candidate_id: S.candidateId, question: r.question, module_id: r.moduleId || null }),
+      }).then((res) => res.json()).then((created) => {
+        if (created && created.id) setRealContactRequests((prev) => [created, ...(prev || [])]);
+      }).catch(() => {});
+    }
+  };
+  // pedido "real" (gravado no Supabase) vs pedido só local (candidato ainda sem conta, ex.: SEED_CONTACTS de demo)
+  const findRealContact = (id) => (realContactRequests || []).find((c) => c.id === id);
+  const resolveContact = (id) => {
+    const real = findRealContact(id);
+    if (real && coordJwt) {
+      fetch(`/api/contact-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+        body: JSON.stringify({}),
+      }).then((res) => res.json()).then((updated) => {
+        if (updated && updated.id) setRealContactRequests((prev) => (prev || []).map((c) => c.id === id ? updated : c));
+      }).catch(() => {});
+      return;
+    }
+    setS((p) => ({ ...p, contactRequests: p.contactRequests.map((c) => (c.id === id ? { ...c, status: 'resolvido' } : c)) }));
+  };
   const addModuleMessage = (moduleId, message) => setS((p) => ({ ...p, moduleConversations: { ...p.moduleConversations, [moduleId]: [...(p.moduleConversations[moduleId] || []), { ts: Date.now(), ...message }] } }));
   // resposta da coordenação a uma dúvida: marca o pedido como resolvido E publica a resposta
   // — no chat principal se a dúvida veio dali, ou no Q&A do módulo se foi feita durante a formação
-  const answerContactRequest = (id, answer, author) => setS((p) => {
-    const text = (answer || '').trim(); if (!text) return p;
-    const req = (p.contactRequests || []).find((c) => c.id === id);
-    const liveReq = req && req.live;
-    const authorName = author || (p.coordProfile && p.coordProfile.name) || 'Coordenação';
+  // echoLocal: injeta a resposta no chat/módulo desta sessão de imediato (candidato ao vivo no mesmo browser);
+  // usado tanto pela resposta directa da coordenação como pelo polling do candidato quando a resposta vem de outro dispositivo
+  const moduleTitleOf = (moduleId) => moduleId ? ((window.PEDAL.MODULES || []).find((m) => m.id === moduleId) || {}).title : null;
+  // echoId: id real do pedido no Supabase — usado para nunca mostrar a mesma resposta duas vezes
+  // (nem quando a coordenação responde na mesma sessão, nem quando o polling do candidato a detecta depois)
+  const echoContactAnswer = (echoId, req, text, authorName) => setS((p) => {
+    if (echoId && (p.answeredContactIds || []).includes(echoId)) return p;
     const msg = { id: 'm' + Math.random().toString(36).slice(2, 9), from: 'agent', coord: true, coordAuthor: authorName, text, originalQuestion: req && req.question };
     let messages = p.messages;
     let moduleConversations = p.moduleConversations;
-    if (liveReq) {
-      if (req && req.moduleId) {
-        moduleConversations = { ...moduleConversations, [req.moduleId]: [...(moduleConversations[req.moduleId] || []), { from: 'agent', coord: true, coordAuthor: authorName, text, ts: Date.now() }] };
-        // notificação no chat principal a indicar que a coordenação respondeu naquele módulo
-        messages = [...messages, { id: 'm' + Math.random().toString(36).slice(2, 9), from: 'system', text: `🎓 A coordenação respondeu à tua dúvida no módulo «${req.moduleTitle || 'formação'}» — abre o módulo para a veres.` }];
-      } else {
-        messages = [...messages, msg];
-      }
+    if (req && req.moduleId) {
+      moduleConversations = { ...moduleConversations, [req.moduleId]: [...(moduleConversations[req.moduleId] || []), { from: 'agent', coord: true, coordAuthor: authorName, text, ts: Date.now() }] };
+      messages = [...messages, { id: 'm' + Math.random().toString(36).slice(2, 9), from: 'system', text: `🎓 A coordenação respondeu à tua dúvida no módulo «${req.moduleTitle || 'formação'}» — abre o módulo para a veres.` }];
+    } else {
+      messages = [...messages, msg];
     }
     return {
-      ...p,
-      contactRequests: p.contactRequests.map((c) => (c.id === id ? { ...c, status: 'resolvido', answer: text, answeredAt: Date.now(), answeredBy: authorName } : c)),
-      messages,
-      moduleConversations,
-      notifs: liveReq ? [{ id: 'n' + Math.random().toString(36).slice(2, 8), ts: Date.now(), type: 'resposta', text: req && req.moduleId ? `a coordenação respondeu à dúvida do módulo «${req.moduleTitle}»` : 'a coordenação respondeu a uma dúvida no chat' }, ...p.notifs] : p.notifs,
+      ...p, messages, moduleConversations,
+      answeredContactIds: echoId ? [...(p.answeredContactIds || []), echoId] : p.answeredContactIds,
+      notifs: [{ id: 'n' + Math.random().toString(36).slice(2, 8), ts: Date.now(), type: 'resposta', text: req && req.moduleId ? `a coordenação respondeu à dúvida do módulo «${req.moduleTitle}»` : 'a coordenação respondeu a uma dúvida no chat' }, ...p.notifs],
     };
   });
+  const answerContactRequest = (id, answer, author) => {
+    const text = (answer || '').trim(); if (!text) return;
+    const authorName = author || (S.coordProfile && S.coordProfile.name) || 'Coordenação';
+    const real = findRealContact(id);
+    if (real && coordJwt) {
+      fetch(`/api/contact-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+        body: JSON.stringify({ answer: text, answered_by: authorName }),
+      }).then((res) => res.json()).then((updated) => {
+        if (updated && updated.id) setRealContactRequests((prev) => (prev || []).map((c) => c.id === id ? updated : c));
+      }).catch(() => {});
+      // candidato ao vivo no mesmo browser: mostra já, sem esperar pelo polling dele
+      if (real.candidate_id === S.candidateId) {
+        echoContactAnswer(id, { question: real.question, moduleId: real.module_id, moduleTitle: moduleTitleOf(real.module_id) }, text, authorName);
+      }
+      return;
+    }
+    setS((p) => ({ ...p, contactRequests: p.contactRequests.map((c) => (c.id === id ? { ...c, status: 'resolvido', answer: text, answeredAt: Date.now(), answeredBy: authorName } : c)) }));
+    const localReq = (S.contactRequests || []).find((c) => c.id === id);
+    if (localReq && localReq.live) echoContactAnswer(null, localReq, text, authorName);
+  };
+  // Candidato: deteta respostas dadas pela coordenação noutro dispositivo (via polling de realContactRequests)
+  useEffectA(() => {
+    if (!S.candidateId || !realContactRequests) return;
+    realContactRequests.forEach((r) => {
+      if (r.status !== 'answered') return;
+      echoContactAnswer(r.id, { question: r.question, moduleId: r.module_id, moduleTitle: moduleTitleOf(r.module_id) }, r.answer, r.answered_by || 'Coordenação');
+    });
+  }, [realContactRequests, S.candidateId]);
   // — Fase 3: conta, sessão, perfil, formalização e conteúdos —
   const createAccount = (email) => { const password = window.PEDAL.genPassword(); setS((p) => ({ ...p, account: { email, password, createdAt: Date.now() } })); return password; };
   const setSession = (authed) => setS((p) => ({ ...p, session: { ...p.session, authed } }));
@@ -371,6 +437,35 @@ function App() {
     const pollTimer = setInterval(refreshCandidates, 5000);
     return () => clearInterval(pollTimer);
   }, [coordJwt]);
+
+  // Feed de notificações da coordenação — substitui S.notifs (localStorage), visível em qualquer dispositivo
+  useEffectA(() => {
+    if (!coordJwt) { setRealNotifs(null); return; }
+    const loadNotifs = () => {
+      fetch('/api/notifications', { headers: { 'Authorization': `Bearer ${coordJwt}` } })
+        .then((r) => r.json())
+        .then((data) => { if (Array.isArray(data)) setRealNotifs(data); })
+        .catch(() => {});
+    };
+    loadNotifs();
+    const t = setInterval(loadNotifs, 10000);
+    return () => clearInterval(t);
+  }, [coordJwt]);
+
+  // Pedidos de contacto reais — coordenação vê todos, candidato só os seus
+  useEffectA(() => {
+    const jwt = coordJwt || candidateJwt;
+    if (!jwt) { setRealContactRequests(null); return; }
+    const loadContactRequests = () => {
+      fetch('/api/contact-requests', { headers: { 'Authorization': `Bearer ${jwt}` } })
+        .then((r) => r.json())
+        .then((data) => { if (Array.isArray(data)) setRealContactRequests(data); })
+        .catch(() => {});
+    };
+    loadContactRequests();
+    const t = setInterval(loadContactRequests, 10000);
+    return () => clearInterval(t);
+  }, [coordJwt, candidateJwt]);
 
   // Sincroniza stage com o backend sempre que muda
   useEffectA(() => {
@@ -526,7 +621,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, refreshCandidates, realCandidates, realTrainers, realNeeds, realStations, realLocalities, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, refreshCandidates, realCandidates, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

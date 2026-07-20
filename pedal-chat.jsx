@@ -290,6 +290,17 @@ function ChatView({ store, tone = 'caloroso' }) {
     addMessage({ from: 'system', text: '✓ Dúvida enviada à coordenação' });
   }
 
+  // envio directo à coordenação a partir do DoubtBoxCard (coordOnly / retry) — sem tentar responder primeiro
+  function submitDoubt({ question, contact }) {
+    const q = (question || '').trim(); if (!q) return;
+    const c = S.candidate;
+    const preview = q.length > 60 ? q.slice(0, 60) + '…' : q;
+    addMessage({ from: 'user', text: q });
+    store.addContactRequest({ name: c.name || 'Voluntário', contact: contact || c.contact || '', email: c.email || '', question: q, live: true });
+    notify({ type: 'contacto', text: `enviou uma dúvida ao agente: “${preview}”` });
+    setInteraction({ type: 'card:doubt', sent: true });
+  }
+
   // tenta responder com a base de conhecimento; se não souber, envia automaticamente à coordenação
   function tryAnswerDoubt(question) {
     const q = (question || '').trim(); if (!q) return;
