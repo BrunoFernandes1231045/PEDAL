@@ -56,7 +56,7 @@ PEDAL.needMatch = function (schedule, localityName, periods) {
 PEDAL.FAQ = [
   { id: 'missao', cat: 'Projeto', q: 'O que é a Pedalar Sem Idade?',
     keywords: ['o que e', 'missao', 'projeto', 'pedalar', 'sobre', 'quem sao', 'fazem'],
-    a: 'Somos um projeto de voluntariado que leva pessoas com mobilidade reduzida — sobretudo idosos — a passear em triciclos elétricos adaptados. O objetivo é simples e bonito: devolver o vento na cara, o contacto com a rua e com as pessoas. 🚲' },
+    a: 'Somos um projeto de voluntariado que leva pessoas com mobilidade reduzida — sobretudo idosos — a passear em triciclos elétricos. O objetivo é simples e bonito: devolver o vento na cara, o contacto com a rua e com as pessoas. 🚲' },
   { id: 'beneficiarios', cat: 'Projeto', q: 'Quem são os passageiros?',
     keywords: ['passageiro', 'beneficiario', 'idoso', 'quem leva', 'quem anda'],
     a: 'Os nossos passageiros são pessoas com mobilidade condicionada, na maioria idosos de lares e centros de dia parceiros. Cada passeio é uma janela para o exterior e uma conversa que faz a diferença.' },
@@ -80,7 +80,7 @@ PEDAL.FAQ = [
     a: 'Não precisas de comprar nada. Os triciclos são da associação e o equipamento de segurança é fornecido. Basta roupa e calçado confortáveis.' },
   { id: 'carta', cat: 'Captação', q: 'Preciso de carta de condução?',
     keywords: ['carta', 'conducao', 'carta de'],
-    a: 'A carta de condução não é obrigatória, mas é uma informação útil que recolhemos na entrevista. O triciclo é elétrico e não exige carta.' },
+    a: 'A carta de condução não é obrigatória, mas é uma informação útil que recolhemos no questionário. O triciclo é elétrico e não exige carta.' },
   { id: 'idade', cat: 'Captação', q: 'Há limite de idade para ser piloto?',
     keywords: ['idade', 'velho', 'novo', 'anos', 'limite de idade'],
     a: 'Tens de ser maior de idade. A partir daí, o que conta é a vontade e a condição para conduzir em segurança. Temos pilotos de várias gerações!' },
@@ -108,13 +108,13 @@ PEDAL.matchFAQ = function (text) {
   return bestScore > 0 ? best : null;
 };
 
-// ── Entrevista estruturada (RF-12) ───────────────────────────────────
+// ── Questionário estruturado (RF-12) ──────────────────────────────────
 PEDAL.INTERVIEW = [
   { id: 'conhecimento', kind: 'text', q: 'Como tiveste conhecimento do projeto?' },
   { id: 'voluntariado', kind: 'choice', q: 'Já fizeste voluntariado?', options: ['Sim', 'Não'] },
   { id: 'voluntariado_info', kind: 'text', q: 'Se já fizeste voluntariado antes, conta-nos sobre isso!',
     skipUnless: { id: 'voluntariado', value: 'Sim' } },
-  { id: 'bicicleta', kind: 'text', q: 'Tens experiência ou gostas de andar de bicicleta?' },
+  { id: 'bicicleta', kind: 'choice', q: 'Tens experiência ou gostas de andar de bicicleta?', options: ['Sim', 'Não'] },
   { id: 'carta', kind: 'choice', q: 'Possuis carta de condução?', options: ['Sim', 'Não'] },
 ];
 
@@ -148,11 +148,11 @@ PEDAL.ROLE_PROFILE = {
 
 // ── Estados do funil (RF-31) ─────────────────────────────────────────
 PEDAL.STAGES = [
-  { id: 'inscricao',    label: 'Inscrição' },
-  { id: 'apresentacao', label: 'Apresentação' },
+  { id: 'inscricao',    label: 'Apresentação' },
+  { id: 'apresentacao', label: 'Inscrição' },
   { id: 'triagem',      label: 'Triagem' },
   { id: 'espera',       label: 'Lista de espera' },
-  { id: 'entrevista',   label: 'Entrevista' },
+  { id: 'entrevista',   label: 'Questionário' },
   { id: 'validacao',    label: 'Validação' },
   { id: 'onboarding',   label: 'Onboarding' },
   { id: 'pratica',      label: 'Formação prática' },
@@ -165,7 +165,7 @@ PEDAL.stageLabel = (id) => (PEDAL.STAGES.find((s) => s.id === id) || {}).label |
 
 // Funil de captação — 5 colunas. 'aguarda' e 'formacao' têm lógica extra no dashboard.
 PEDAL.FUNNEL = [
-  { id: 'ite',        label: 'Inscrição, Triagem e Entrevista', match: ['inscricao', 'apresentacao', 'triagem', 'entrevista'] },
+  { id: 'ite',        label: 'Inscrição, Triagem e Questionário', match: ['inscricao', 'apresentacao', 'triagem', 'entrevista'] },
   { id: 'validacao',  label: 'Validação',                       match: ['validacao'] },
   { id: 'onboarding', label: 'Onboarding',                      match: ['onboarding'] },
   { id: 'aguarda',    label: 'Aguarda Agendamento',             match: ['pratica'] },
@@ -207,7 +207,7 @@ PEDAL.SEED_CANDIDATES = [
 // Notificações iniciais do feed da coordenação
 PEDAL.SEED_NOTIFS = [
   { id: 'n0', type: 'concluido', who: 'Joana Ferreira', text: 'concluiu o onboarding e está pronta para ativação', ago: 'ontem' },
-  { id: 'n1', type: 'entrevista', who: 'Tomás Lopes', text: 'concluiu a entrevista — aguarda validação', ago: 'há 2 h' },
+  { id: 'n1', type: 'entrevista', who: 'Tomás Lopes', text: 'concluiu o questionário — aguarda validação', ago: 'há 2 h' },
 ];
 
 // Formadores / coaches de território (RF) — nome, nascimento, telefone, email
@@ -267,7 +267,7 @@ PEDAL.TRAINING_FAQ = [
 PEDAL.ACTIVE_FAQ = [
   { id: 'af_sobre', cat: 'Projeto', q: 'O que é a Pedalar Sem Idade?',
     keywords: ['o que e', 'projeto', 'pedalar sem idade', 'missao', 'movimento'],
-    a: 'A Pedalar Sem Idade é um movimento internacional que devolve a idosos e a pessoas com mobilidade reduzida o gosto pelo ar livre — com passeios em triciclo elétrico adaptado, conduzidos por voluntários como tu. Em Portugal organizamo-nos em núcleos locais, em parceria com lares, centros de dia e câmaras. 🚲💛' },
+    a: 'A Pedalar Sem Idade é um movimento internacional que devolve a idosos e a pessoas com mobilidade reduzida o gosto pelo ar livre — com passeios em triciclo elétrico, conduzidos por voluntários como tu. Em Portugal organizamo-nos em núcleos locais, em parceria com lares, centros de dia e câmaras. 🚲💛' },
   { id: 'af_lema', cat: 'Projeto', q: 'O que significa "direito a vento no cabelo"?',
     keywords: ['vento no cabelo', 'lema', 'slogan', 'direito'],
     a: 'É o nosso lema. A ideia é simples: a velhice não tira o direito de sentir o vento na cara, de sair de casa, de viver o bairro. Cada passeio é um pequeno gesto que devolve esse direito.' },

@@ -20,12 +20,30 @@ function genPassword() {
   return `${word}${num}`;
 }
 
+// listUsers() só devolve 50 contas por página — com dezenas de candidatos
+// registados (cada um cria uma conta Auth), os coordenadores podem cair
+// numa página seguinte e desaparecer desta lista. Percorre todas as páginas.
+async function listAllUsers() {
+  const all = [];
+  let page = 1;
+  const perPage = 200;
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    all.push(...data.users);
+    if (data.users.length < perPage) break;
+    page++;
+  }
+  return all;
+}
+
 // GET /api/coord-users — listar coordenadores (só administracao pode)
 router.get('/', requireAuth, requireCoordinator, requireRole(['administracao']), async (req, res) => {
-  const { data, error } = await supabase.auth.admin.listUsers();
-  if (error) return res.status(500).json({ error: error.message });
+  let allUsers;
+  try { allUsers = await listAllUsers(); }
+  catch (error) { return res.status(500).json({ error: error.message }); }
 
-  const coordinators = data.users
+  const coordinators = allUsers
     .filter((u) => u.user_metadata?.role === 'coordinator')
     .map((u) => ({
       id: u.id,
@@ -70,10 +88,11 @@ router.patch('/:email', requireAuth, requireCoordinator, requireRole(['administr
   if (!coordRole) return res.status(400).json({ error: `Função inválida. Valores aceites: ${Object.keys(ROLE_MAP).join(', ')}` });
 
   // Encontrar utilizador pelo email
-  const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
-  if (listError) return res.status(500).json({ error: listError.message });
+  let allUsers;
+  try { allUsers = await listAllUsers(); }
+  catch (listError) { return res.status(500).json({ error: listError.message }); }
 
-  const user = listData.users.find((u) => u.email === email);
+  const user = allUsers.find((u) => u.email === email);
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   const { error } = await supabase.auth.admin.updateUserById(user.id, {
@@ -89,10 +108,11 @@ router.patch('/:email', requireAuth, requireCoordinator, requireRole(['administr
 router.delete('/:email', requireAuth, requireCoordinator, requireRole(['administracao']), async (req, res) => {
   const email = decodeURIComponent(req.params.email);
 
-  const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
-  if (listError) return res.status(500).json({ error: listError.message });
+  let allUsers;
+  try { allUsers = await listAllUsers(); }
+  catch (listError) { return res.status(500).json({ error: listError.message }); }
 
-  const user = listData.users.find((u) => u.email === email);
+  const user = allUsers.find((u) => u.email === email);
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   const { error } = await supabase.auth.admin.deleteUser(user.id);

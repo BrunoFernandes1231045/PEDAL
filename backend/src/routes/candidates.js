@@ -15,6 +15,12 @@ router.post('/', async (req, res) => {
   const { name, email, dob, phone, cc, profissao, nif, rua, porta, codigo_postal, cidade, password: providedPassword } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name e email são obrigatórios' });
 
+  if (dob) {
+    if (new Date(dob) > new Date()) return res.status(400).json({ error: 'A data de nascimento não pode ser uma data futura.' });
+    const age = Math.floor((Date.now() - new Date(dob).getTime()) / 3.15576e10);
+    if (age < 18) return res.status(400).json({ error: 'É preciso ter pelo menos 18 anos para te inscreveres.' });
+  }
+
   const initialPassword = providedPassword || genPassword();
 
   const emailVerification = process.env.EMAIL_VERIFICATION === 'true';

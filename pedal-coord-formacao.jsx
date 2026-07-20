@@ -4,9 +4,9 @@
 const { useState: useStateCF, useRef: useRefCF } = React;
 
 // ── Modal: confirmar conclusão ou rejeitar o piloto na formação prática ──
-function PracticalCompleteModal({ c, store, onClose }) {
+function PracticalCompleteModal({ c, store, onClose, startEditing }) {
   const P = window.PEDAL;
-  const sc = c.scheduling || store.S.scheduling[c.id] || {};
+  const sc = store.S.scheduling[c.id] || c.scheduling || {};
   const slots = sc.slots || [];
   const slot = slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? slots[sc.chosen] : null);
   const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
@@ -14,7 +14,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
 
   const [mode, setMode] = useStateCF(null); // 'confirm' | 'reject'
   const [comment, setComment] = useStateCF('');
-  const [editing, setEditing] = useStateCF(false);
+  const [editing, setEditing] = useStateCF(!!startEditing);
   const [editDate, setEditDate] = useStateCF(slot ? slot.date : '');
   const [editTime, setEditTime] = useStateCF(slot ? (slot.startTime || slot.time || '') : '');
   const [editTrainerId, setEditTrainerId] = useStateCF(sc.trainerId || '');
@@ -66,10 +66,10 @@ function PracticalCompleteModal({ c, store, onClose }) {
 
     patchSched({ ...sc, slots: newSlots, trainerId: editTrainerId, stationId: editStationId, chatNotify: notifs });
     if (changed) store.notify({ type: 'agendado', who: c.name, text: `horário da formação prática atualizado` });
-    setEditing(false);
+    onClose();
   };
 
-  const moveStage = (stage) => { if (c.live) store.setStage(stage); else store.setOverride(c.id, stage); };
+  const moveStage = (stage) => { if (c.live) store.setStage(stage); };
 
   const doConfirm = () => {
     moveStage('formalizacao');
@@ -88,7 +88,6 @@ function PracticalCompleteModal({ c, store, onClose }) {
 
   const doReject = () => {
     if (c.live) { store.setStage('rejeitado'); store.up({ rejection: { reason: comment } }); }
-    else { store.setOverride(c.id, 'rejeitado'); }
     store.patchRealCandidate(c.id, { stage: 'rejeitado' });
     if (!c.live && store.coordJwt) {
       fetch(`/api/candidates/${c.id}`, {
@@ -133,12 +132,6 @@ function PracticalCompleteModal({ c, store, onClose }) {
               <span style={{ color: 'var(--ink-soft)' }}>Local</span>
               <span style={{ fontWeight: 700, color: station ? 'var(--ink)' : 'var(--accent-deep)' }}>{station ? station.name : 'por definir'}</span>
             </div>
-            {!mode && (
-              <button type="button" onClick={() => setEditing(true)}
-                style={{ marginTop: 2, alignSelf: 'start', background: 'none', border: 'none', cursor: 'pointer', font: '600 12px var(--ui)', color: 'var(--primary-deep)', padding: 0, textDecoration: 'underline' }}>
-                Editar horário, coach ou local
-              </button>
-            )}
           </div>
         )}
 
@@ -146,7 +139,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
         {editing && (
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setEditing(false)}>Cancelar</button>
+              <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
               <button className="pedal-btn primary" style={{ flex: 1, opacity: (editDate && editTime) ? 1 : 0.45 }} disabled={!editDate || !editTime} onClick={saveEdit}>Guardar alterações</button>
             </div>
             <div style={lbl}>Data e hora de início</div>
@@ -187,7 +180,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
             {!mode ? (
               <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                 <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode('reject')}>Rejeitar piloto</button>
-                <button className="pedal-btn primary" style={{ flex: 2 }} onClick={() => setMode('confirm')}>Confirmar conclusão ✓</button>
+                <button className="pedal-btn primary" style={{ flex: 2 }} onClick={() => setMode('confirm')}>Aceitar piloto ✓</button>
               </div>
             ) : mode === 'confirm' ? (
               <div style={{ marginTop: 16 }}>
@@ -196,7 +189,7 @@ function PracticalCompleteModal({ c, store, onClose }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => setMode(null)}>Voltar</button>
-                  <button className="pedal-btn primary" style={{ flex: 1 }} onClick={doConfirm}>Confirmar conclusão</button>
+                  <button className="pedal-btn primary" style={{ flex: 1 }} onClick={doConfirm}>Aceitar piloto</button>
                 </div>
               </div>
             ) : (

@@ -25,6 +25,7 @@ function Icon({ name, size = 20, color = 'currentColor', stroke = 2 }) {
     case 'people':  return <svg {...p}><circle cx="9" cy="8" r="3" /><path d="M3 19c.8-3 3.2-4.5 6-4.5S14.2 16 15 19" /><path d="M16 5.5a3 3 0 010 5.8M18 19c-.3-2-1.2-3.3-2.5-4" /></svg>;
     case 'map':        return <svg {...p}><path d="M3 7l5 2 8-4 5 2v12l-5-2-8 4-5-2z" /><path d="M8 9v10M16 5v10" /></svg>;
     case 'mortarboard': return <svg {...p}><path d="M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" /><path d="M22 10v6" /></svg>;
+    case 'search':  return <svg {...p}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>;
     default: return null;
   }
 }

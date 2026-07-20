@@ -78,7 +78,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         if (open.length) {
           return [
             { text: `Boa notícia! 🎉 Há procura de pilotos em ${names(open)} compatível com a tua disponibilidade.` },
-            { text: 'Contamos com cerca de 2 horas por semana da tua parte. Se isso te servir, avançamos já para uma breve entrevista — demora cerca de 2 minutos.' },
+            { text: 'Contamos com cerca de 2 horas por semana da tua parte. Se isso te servir, avançamos já para um breve questionário — demora cerca de 2 minutos.' },
           ];
         }
         return [
@@ -157,7 +157,7 @@ function ChatView({ store, tone = 'caloroso' }) {
           ]};
         }
         return anyOpen
-          ? { type: 'quick', options: [{ label: 'Começar entrevista →', go: 'interview', accent: 'fill' }, { label: 'Tenho uma dúvida', action: 'askPedal' }] }
+          ? { type: 'quick', options: [{ label: 'Começar questionário →', go: 'interview', accent: 'fill' }, { label: 'Tenho uma dúvida', action: 'askPedal' }] }
           : { type: 'quick', options: [{ label: 'Escolher outras zonas', go: 'triage' }] };
       }
       case 'interview': return stepInteraction((S.chat && S.chat.interviewStep) || 0);
@@ -191,7 +191,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         const r = triageResultRef.current || {};
         const open = r.open || [];
         const allSel = [...open, ...(r.closed || [])];
-        if (open.length) notify({ type: 'qualificado', text: `é elegível em ${open.map((l) => l.name).join(', ')} — pode avançar para entrevista` });
+        if (open.length) notify({ type: 'qualificado', text: `é elegível em ${open.map((l) => l.name).join(', ')} — pode avançar para o questionário` });
         else { setStage('espera'); notify({ type: 'espera', text: `ficou em lista de espera (${allSel.map((l) => l.name).join(', ')})` }); }
         break;
       }
@@ -263,8 +263,8 @@ function ChatView({ store, tone = 'caloroso' }) {
     setInteraction(null);
     if (i < INTERVIEW.length) say([{ text: INTERVIEW[i].q }], () => setInteraction(stepInteraction(i)));
     else {
-      addMessage({ from: 'system', text: '✓ Entrevista concluída — dados enviados à coordenação' });
-      notify({ type: 'entrevista', text: 'concluiu a entrevista — aguarda validação' });
+      addMessage({ from: 'system', text: '✓ Questionário concluído — dados enviados à coordenação' });
+      notify({ type: 'entrevista', text: 'concluiu o questionário — aguarda validação' });
       if (S.candidateId && store.candidateJwt) {
         fetch(`/api/candidates/${S.candidateId}`, {
           method: 'PATCH',
@@ -609,11 +609,12 @@ function ChatView({ store, tone = 'caloroso' }) {
     if (it.type === 'interviewText') return <InterviewText q={it.q} onSubmit={(v) => answerInterview(it.q.id, v)} />;
     if (it.type === 'schedule_single') {
       const proposedSlots = ((liveSched && liveSched.slots) || []).map((s, i) => ({ s, i })).filter(({ s }) => !s.state || s.state === 'proposto');
-      return <SingleSelectSchedulePicker slots={proposedSlots} onConfirm={(pickedIdx) => {
-        const { s, i: origIdx } = proposedSlots[pickedIdx];
-        const label = `${P.fmtDate(s.date)} às ${s.startTime || s.time || ''}`;
+      return <SingleSelectSchedulePicker slots={proposedSlots} onConfirm={(pickedIndices) => {
+        const picked = pickedIndices.map((idx) => proposedSlots[idx]);
+        const label = picked.map(({ s }) => `${P.fmtDate(s.date)} às ${s.startTime || s.time || ''}`).join('; ');
         addMessage({ from: 'user', text: label });
-        const updatedSlots = (liveSched.slots || []).map((sl, idx) => idx === origIdx ? { ...sl, state: 'selecionado' } : sl);
+        const pickedOrigIdx = picked.map(({ i }) => i);
+        const updatedSlots = (liveSched.slots || []).map((sl, idx) => pickedOrigIdx.includes(idx) ? { ...sl, state: 'selecionado' } : sl);
         const updatedSched = { ...(liveSched || {}), slots: updatedSlots, status: 'aguarda_coordenacao' };
         store.setScheduling(activeSchedKey, { slots: updatedSlots, status: 'aguarda_coordenacao' });
         if (S.candidateId) store.patchRealCandidate(S.candidateId, { scheduling: updatedSched });
@@ -622,7 +623,7 @@ function ChatView({ store, tone = 'caloroso' }) {
           fetch(`/api/candidates/${S.candidateId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${schedJwt}` }, body: JSON.stringify({ scheduling: updatedSched }) }).catch(() => {});
         }
         setStage('pratica');
-        notify({ type: 'agendado', text: `escolheu horário para a formação prática — aguarda confirmação` });
+        notify({ type: 'agendado', text: `escolheu ${picked.length > 1 ? `${picked.length} horários` : 'horário'} para a formação prática — aguarda confirmação` });
         addMessage({ from: 'system', text: 'Preferência enviada à coordenação' });
         setInteraction(null);
         setChat({ node: 'practical_awaiting_coord' });
@@ -824,20 +825,30 @@ function SchedulePicker({ slots, station, onPick, onRequestNew }) {
 
 function SingleSelectSchedulePicker({ slots, onConfirm, onProposeOwn }) {
   const P = window.PEDAL;
-  const [selected, setSelected] = useStateC(null);
+  const [selected, setSelected] = useStateC([]);
   const [confirming, setConfirming] = useStateC(false);
+  const toggle = (idx) => setSelected((prev) => prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]);
 
-  if (confirming && selected !== null && slots[selected]) {
-    const { s } = slots[selected];
-    const timeStr = (s.startTime || s.time || '') + (s.endTime ? `–${s.endTime}` : '');
+  if (confirming && selected.length) {
+    const picked = selected.map((idx) => slots[idx]).filter(Boolean);
     return (
       <div className="pedal-card" style={{ width: '100%' }}>
-        <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)', marginBottom: 10 }}>Confirmar horário?</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--primary-soft)', borderRadius: 10, marginBottom: 14 }}>
-          <Icon name="check" size={14} color="var(--primary-deep)" />
-          <span style={{ font: '700 13px var(--ui)', color: 'var(--primary-deep)' }}>{P.fmtDate(s.date)} · {timeStr} · ~2h</span>
+        <div style={{ font: '700 13.5px var(--ui)', color: 'var(--ink)', marginBottom: 10 }}>Confirmar horário{picked.length > 1 ? 's' : ''}?</div>
+        <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+          {picked.map(({ s, i }) => {
+            const timeStr = (s.startTime || s.time || '') + (s.endTime ? `–${s.endTime}` : '');
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--primary-soft)', borderRadius: 10 }}>
+                <Icon name="check" size={14} color="var(--primary-deep)" />
+                <span style={{ font: '700 13px var(--ui)', color: 'var(--primary-deep)' }}>{P.fmtDate(s.date)} · {timeStr} · ~2h</span>
+              </div>
+            );
+          })}
         </div>
-        <button className="pedal-btn primary" style={{ width: '100%' }} onClick={() => onConfirm(selected)}>Confirmar este horário</button>
+        {picked.length > 1 && (
+          <p style={{ font: '400 11.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 12px' }}>A coordenação escolhe qual destes fica definitivo.</p>
+        )}
+        <button className="pedal-btn primary" style={{ width: '100%' }} onClick={() => onConfirm(selected)}>Confirmar {picked.length > 1 ? 'estes horários' : 'este horário'}</button>
         <button className="pedal-btn ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => setConfirming(false)}>Rever</button>
       </div>
     );
@@ -846,13 +857,13 @@ function SingleSelectSchedulePicker({ slots, onConfirm, onProposeOwn }) {
   return (
     <div className="pedal-card" style={{ width: '100%' }}>
       <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', marginBottom: 2 }}>Horários propostos</div>
-      <div style={{ font: '400 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 12 }}>Escolhe o horário que te dá mais jeito. A formação tem a duração de aproximadamente 2 horas.</div>
+      <div style={{ font: '400 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 12 }}>Escolhe o(s) horário(s) que te dão mais jeito — podes escolher mais do que um. A formação tem a duração de aproximadamente 2 horas.</div>
       <div style={{ display: 'grid', gap: 8 }}>
         {slots.map(({ s, i }, idx) => {
-          const on = selected === idx;
+          const on = selected.includes(idx);
           const timeStr = (s.startTime || s.time || '') + (s.endTime ? `–${s.endTime}` : '');
           return (
-            <button key={i} className={'pedal-slotpick' + (on ? ' on' : '')} onClick={() => setSelected(on ? null : idx)}
+            <button key={i} className={'pedal-slotpick' + (on ? ' on' : '')} onClick={() => toggle(idx)}
               style={{ outline: on ? '2px solid var(--primary)' : undefined, background: on ? 'var(--primary-soft)' : undefined }}>
               <span className="pedal-slotcal">
                 {on ? <Icon name="check" size={17} color="var(--primary)" /> : <Icon name="clock" size={17} color="var(--ink-soft)" />}
@@ -865,9 +876,9 @@ function SingleSelectSchedulePicker({ slots, onConfirm, onProposeOwn }) {
           );
         })}
       </div>
-      <button className="pedal-btn primary" style={{ width: '100%', marginTop: 12, opacity: selected !== null ? 1 : 0.4 }}
-        disabled={selected === null} onClick={() => setConfirming(true)}>
-        Escolher este horário
+      <button className="pedal-btn primary" style={{ width: '100%', marginTop: 12, opacity: selected.length ? 1 : 0.4 }}
+        disabled={!selected.length} onClick={() => setConfirming(true)}>
+        Escolher {selected.length > 1 ? 'estes horários' : 'este horário'}
       </button>
       <button className="pedal-authlink" style={{ display: 'block', margin: '12px auto 0' }} onClick={onProposeOwn}>Nenhum me serve — propor um horário</button>
     </div>

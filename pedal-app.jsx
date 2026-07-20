@@ -312,7 +312,7 @@ function App() {
   useEffectA(() => {
     fetch('/api/needs')
       .then((r) => r.json())
-      .then((data) => { if (data && typeof data === 'object' && !Array.isArray(data)) setRealNeeds(data); })
+      .then((data) => { if (data && typeof data === 'object' && !Array.isArray(data) && !data.error) setRealNeeds(data); })
       .catch(() => {});
   }, []);
 
@@ -328,7 +328,7 @@ function App() {
     if (S.chat && S.chat.node === 'triage') {
       fetch('/api/needs')
         .then((r) => r.json())
-        .then((data) => { if (data && typeof data === 'object' && !Array.isArray(data)) setRealNeeds(data); })
+        .then((data) => { if (data && typeof data === 'object' && !Array.isArray(data) && !data.error) setRealNeeds(data); })
         .catch(() => {});
     }
   }, [S.chat && S.chat.node]);
@@ -349,25 +349,26 @@ function App() {
       .catch(() => {});
   }, [coordJwt]);
 
+  const mapCandidate = (c) => {
+    const parts = (c.name || '').split(' ');
+    const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
+    const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
+    const perData = window.PEDAL && window.PEDAL.PERIODS;
+    const rawPeriods = c.periods ? c.periods.split(', ').filter(Boolean) : [];
+    const periods = rawPeriods.map((p) => { const f = perData && perData.find((x) => x.name === p); return f ? f.id : p; });
+    return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', cc: c.cc || '', profissao: c.profissao || '', nif: c.nif || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods, availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '', scheduling: c.scheduling || null, interview: c.interview || null, chat_messages: Array.isArray(c.chat_messages) ? c.chat_messages : null, rua: c.rua || '', porta: c.porta || '', codigo_postal: c.codigo_postal || '', cidade: c.cidade || '', signature: c.signature || null };
+  };
+  const refreshCandidates = () => {
+    if (!coordJwt) return;
+    fetch('/api/candidates', { headers: { 'Authorization': `Bearer ${coordJwt}` } })
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setRealCandidates(data.map(mapCandidate)); })
+      .catch(() => {});
+  };
   useEffectA(() => {
     if (!coordJwt) { setRealCandidates(null); return; }
-    const mapC = (c) => {
-      const parts = (c.name || '').split(' ');
-      const initials = [parts[0], parts[parts.length - 1]].filter(Boolean).map((p) => p[0].toUpperCase()).join('');
-      const days = c.created_at ? Math.floor((Date.now() - new Date(c.created_at)) / 86400000) : 0;
-      const perData = window.PEDAL && window.PEDAL.PERIODS;
-      const rawPeriods = c.periods ? c.periods.split(', ').filter(Boolean) : [];
-      const periods = rawPeriods.map((p) => { const f = perData && perData.find((x) => x.name === p); return f ? f.id : p; });
-      return { id: c.id, name: c.name, email: c.email, contact: c.phone || '', dob: c.dob || '', cc: c.cc || '', profissao: c.profissao || '', nif: c.nif || '', stage: c.stage || 'inscricao', locality: c.locality || '—', localityId: null, initials, days, source: 'PEDAL', periods, availability: Array.isArray(c.availability) ? c.availability : [], weekdays: [], contactDate: c.created_at ? c.created_at.slice(0, 10) : '', scheduling: c.scheduling || null, interview: c.interview || null, chat_messages: Array.isArray(c.chat_messages) ? c.chat_messages : null, rua: c.rua || '', porta: c.porta || '', codigo_postal: c.codigo_postal || '', cidade: c.cidade || '', signature: c.signature || null };
-    };
-    const loadCandidates = () => {
-      fetch('/api/candidates', { headers: { 'Authorization': `Bearer ${coordJwt}` } })
-        .then((r) => r.json())
-        .then((data) => { if (Array.isArray(data)) setRealCandidates(data.map(mapC)); })
-        .catch(() => {});
-    };
-    loadCandidates();
-    const pollTimer = setInterval(loadCandidates, 5000);
+    refreshCandidates();
+    const pollTimer = setInterval(refreshCandidates, 5000);
     return () => clearInterval(pollTimer);
   }, [coordJwt]);
 
@@ -383,7 +384,7 @@ function App() {
       fetch(base, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ periods: periodsText }) }).catch(() => {});
     }
     if (S.candidate.localities && S.candidate.localities.length) {
-      const locs = window.PEDAL && window.PEDAL.LOCALITIES;
+      const locs = realLocalities || (window.PEDAL && window.PEDAL.LOCALITIES);
       const names = S.candidate.localities.map((id) => locs ? ((locs.find((l) => l.id === id) || {}).name || id) : id).join(', ');
       fetch(base, { method: 'PATCH', headers: hdrs, body: JSON.stringify({ locality: names }) }).catch(() => {});
     }
@@ -460,7 +461,7 @@ function App() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
       body: JSON.stringify({ name }),
     }).then((r) => r.json().then((d) => {
-      if (r.ok) { setRealLocalities((prev) => [...(prev || []), d].sort((a, b) => a.name.localeCompare(b.name, 'pt'))); return { ok: true }; }
+      if (r.ok) { setRealLocalities((prev) => [...(prev || []), d]); return { ok: true }; }
       return { ok: false, error: d.error || 'Erro ao criar' };
     })).catch(() => ({ ok: false, error: 'Erro de rede' }));
   };
@@ -525,7 +526,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, realCandidates, realTrainers, realNeeds, realStations, realLocalities, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, refreshCandidates, realCandidates, realTrainers, realNeeds, realStations, realLocalities, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

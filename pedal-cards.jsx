@@ -15,7 +15,7 @@ function getVideoEmbed(url) {
 function ProjectCard({ videoUrl }) {
   const embedUrl = getVideoEmbed(videoUrl);
   const facts = [
-    { icon: 'route', t: 'Passeios em triciclo elétrico adaptado' },
+    { icon: 'route', t: 'Passeios em triciclo elétrico' },
     { icon: 'people', t: 'Para idosos e pessoas com mobilidade reduzida' },
     { icon: 'heart', t: 'Contacto social, ar livre e bem-estar' },
   ];
@@ -341,7 +341,10 @@ function ProfileForm({ onSubmit }) {
   const nifDigits = nif.replace(/\D/g, '');
   const nifOk = nifDigits.length === 9;
   const cpOk = /^\d{4}-\d{3}$/.test(codigoPostal.trim());
-  const valid = name.trim().length > 1 && phoneOk && emailOk && dob && cc.trim().length >= 8 && profissao.trim().length > 1 && nifOk && rua.trim().length > 2 && porta.trim().length > 0 && cpOk && cidade.trim().length > 1;
+  const isFuture = dob && new Date(dob) > new Date();
+  const age = dob ? Math.floor((Date.now() - new Date(dob).getTime()) / 3.15576e10) : null;
+  const isAdult = age !== null && age >= 18;
+  const valid = name.trim().length > 1 && phoneOk && emailOk && dob && !isFuture && isAdult && cc.trim().length >= 8 && profissao.trim().length > 1 && nifOk && rua.trim().length > 2 && porta.trim().length > 0 && cpOk && cidade.trim().length > 1;
 
   const handleCp = (v) => {
     const digits = v.replace(/\D/g, '').slice(0, 7);
@@ -353,10 +356,12 @@ function ProfileForm({ onSubmit }) {
   return (
     <div className="pedal-card">
       <Field label="Como te chamas?">
-        <input className="pedal-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome e apelido" />
+        <input className="pedal-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" />
       </Field>
       <Field label="Data de nascimento">
-        <input className="pedal-input" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+        <input className="pedal-input" type="date" value={dob} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDob(e.target.value)} />
+        {dob && isFuture && <div style={{ font: '400 11px var(--ui)', color: 'var(--accent-deep)', marginTop: 5 }}>A data de nascimento não pode ser uma data futura.</div>}
+        {dob && !isFuture && !isAdult && <div style={{ font: '400 11px var(--ui)', color: 'var(--accent-deep)', marginTop: 5 }}>É preciso ter pelo menos 18 anos para te inscreveres como voluntário.</div>}
       </Field>
       <Field label="Número do Cartão de Cidadão">
         <input className="pedal-input" value={cc} onChange={(e) => setCc(e.target.value.replace(/[^\d]/g, '').slice(0, 8))} placeholder="XXXXXXXX" maxLength={8} />

@@ -176,10 +176,10 @@ function ProcessoView({ store }) {
           })}
         </div>
 
-        {/* resumo da entrevista (perguntas + respostas) — visível sem scroll na conversa */}
+        {/* resumo do questionário (perguntas + respostas) — visível sem scroll na conversa */}
         {Object.keys(c.interview || {}).length > 0 && (
           <div style={{ marginTop: 20 }}>
-            <div style={{ font: '700 12px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 10 }}>Resumo da entrevista</div>
+            <div style={{ font: '700 12px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 10 }}>Resumo do questionário</div>
             <div className="pedal-card" style={{ animation: 'none' }}>
               <div style={{ display: 'grid', gap: 12 }}>
                 {P.INTERVIEW.filter((q) => c.interview[q.id]).map((q) => (

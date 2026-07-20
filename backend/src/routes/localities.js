@@ -114,8 +114,13 @@ router.delete('/:slug', requireAuth, requireCoordinator, async (req, res) => {
   }
 
   const { error } = await supabase
-    .from('localities').update({ active: false }).eq('id', loc.id);
-  if (error) return res.status(500).json({ error: error.message });
+    .from('localities').delete().eq('id', loc.id);
+  if (error) {
+    if (error.code === '23503') {
+      return res.status(409).json({ error: `Não é possível eliminar "${loc.name}" — ainda há registos associados a esta localidade.` });
+    }
+    return res.status(500).json({ error: error.message });
+  }
   res.status(204).send();
 });
 

@@ -4,7 +4,7 @@ const { useState: useStateD, useEffect: useEffectD, useRef: useRefD } = React;
 
 const NOTIF_META = {
   qualificado: { icon: 'user', tone: 'green', verb: 'Candidato qualificado' },
-  entrevista: { icon: 'doc', tone: 'amber', verb: 'Entrevista concluída' },
+  entrevista: { icon: 'doc', tone: 'amber', verb: 'Questionário concluído' },
   validado: { icon: 'check', tone: 'green', verb: 'Candidatura validada' },
   concluido: { icon: 'sparkle', tone: 'green', verb: 'Onboarding concluído' },
   espera: { icon: 'clock', tone: 'neutral', verb: 'Lista de espera' },
@@ -55,6 +55,91 @@ function getSchedStatus(sc) {
   return 'aguarda_candidato';
 }
 
+// Devolve a tarefa pendente (se alguma) que um candidato requer da coordenação —
+// usada tanto na central de tarefas como na pesquisa rápida, para nunca divergir.
+function pendingTaskFor(c, { schedOf, setSel, setSchedFor, setSlotReviewFor, setCompleteFor }) {
+  const P = window.PEDAL;
+  if (c.stage === 'validacao') return { kind: 'validar', label: 'Validar candidatura', btn: 'Rever', act: () => setSel(c) };
+  if (c.stage === 'pratica') {
+    const sc = schedOf(c); const st = getSchedStatus(sc);
+    if (!st || st === 'aguarda_candidato') {
+      const proposed = sc && sc.slots && sc.slots.length;
+      return { kind: 'agendar',
+        label: proposed ? 'Horários propostos · aguarda resposta do candidato' : 'Propor horários da formação prática',
+        btn: proposed ? 'Editar' : 'Propor', act: () => setSchedFor(c) };
+    } else if (st === 'aguarda_coordenacao') {
+      const chosenCount = (sc.slots || []).filter((s) => s.state === 'selecionado').length;
+      return { kind: 'confirmar', label: chosenCount > 1 ? 'Candidato escolheu vários horários · confirmar ou recusar' : 'Candidato escolheu um horário · confirmar ou recusar', btn: 'Rever', act: () => setSlotReviewFor(c) };
+    } else if (st === 'candidato_propoe') {
+      return { kind: 'confirmar', label: 'Candidato propôs um horário alternativo · confirmar ou recusar', btn: 'Rever', act: () => setSlotReviewFor(c) };
+    } else if (st === 'aguarda_telefone') {
+      return { kind: 'agendar', label: 'Horário recusado · ligar ao candidato e registar horário definitivo', btn: 'Registar', act: () => setSlotReviewFor(c) };
+    } else if (st === 'confirmado') {
+      const confirmedSlot = sc.slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? sc.slots[sc.chosen] : null);
+      if (confirmedSlot) return { kind: 'concluir', label: `Terminar formação prática · ${P.fmtDate(confirmedSlot.date)}`,
+        btn: 'Terminar', act: () => setCompleteFor({ c, edit: false }),
+        btn2: 'Editar', act2: () => setCompleteFor({ c, edit: true }) };
+    }
+  }
+  return null;
+}
+
+// ── Pesquisa rápida de candidatos (barra de pesquisa por nome) ──────
+function CandidateSearch({ candidates, setSel, setSchedFor, setSlotReviewFor, setCompleteFor, schedOf }) {
+  const P = window.PEDAL;
+  const [q, setQ] = useStateD('');
+  const [open, setOpen] = useStateD(false);
+  const wrapRef = useRefD(null);
+  const taskCtx = { schedOf, setSel, setSchedFor, setSlotReviewFor, setCompleteFor };
+
+  useEffectD(() => {
+    const onDocClick = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const query = norm(q).trim();
+  const results = query ? candidates.filter((c) => c.stage !== 'rejeitado' && norm(c.name).includes(query)).slice(0, 8) : [];
+
+  const pick = (c, task) => {
+    if (task) task.act(); else setSel(c);
+    setQ(''); setOpen(false);
+  };
+
+  return (
+    <div className="pedal-searchwrap" ref={wrapRef}>
+      <Icon name="search" size={15} color="var(--ink-soft)" />
+      <input
+        className="pedal-searchinput"
+        placeholder="Pesquisar candidato…"
+        value={q}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); setOpen(false); } }}
+      />
+      {open && query && (
+        <div className="pedal-searchdrop">
+          {results.length === 0 ? (
+            <div className="pedal-searchempty">Sem resultados para "{q}".</div>
+          ) : results.map((c) => {
+            const task = pendingTaskFor(c, taskCtx);
+            return (
+              <button key={c.id} className="pedal-searchitem" onClick={() => pick(c, task)}>
+                <div className="pedal-kav">{c.initials}</div>
+                <div style={{ minWidth: 0, textAlign: 'left' }}>
+                  <div style={{ font: '700 12.5px var(--ui)', color: 'var(--ink)' }}>{c.name}</div>
+                  <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)' }}>{P.stageLabel(c.stage)}{task ? ' · ' + task.label : ''}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard({ store }) {
   const S = store.S; const P = window.PEDAL;
   const coordRole = store.coordRole || 'coordenacao';
@@ -101,7 +186,6 @@ function Dashboard({ store }) {
 
   function validate(c) {
     if (isLiveCandidate(c)) { store.up({ validated: true }); store.setStage('onboarding'); }
-    else { store.setOverride(c.id, 'onboarding'); }
     store.patchRealCandidate(c.id, { stage: 'onboarding' });
     if (!isLiveCandidate(c) && store.coordJwt) {
       fetch(`/api/candidates/${c.id}`, {
@@ -182,6 +266,7 @@ function Dashboard({ store }) {
                 {n.badge > 0 && <span className="pedal-navbadge">{n.badge}</span>}
               </button>
             ))}
+            <CandidateSearch candidates={candidates} setSel={setSel} setSchedFor={setSchedFor} setSlotReviewFor={setSlotReviewFor} setCompleteFor={setCompleteFor} schedOf={schedOf} />
           </div>
           {section === 'geral' && <OverviewSection ctx={ctx} />}
           {section === 'espera' && <WaitingList ctx={ctx} />}
@@ -197,7 +282,7 @@ function Dashboard({ store }) {
 
       {sel && <CandidateDetail c={(store.realCandidates || []).find((x) => x.id === sel.id) || sel} store={store} onClose={() => setSel(null)} />}
       {schedFor && <SchedulingModal c={schedFor} store={store} onClose={() => setSchedFor(null)} />}
-      {completeFor && <PracticalCompleteModal c={completeFor} store={store} onClose={() => setCompleteFor(null)} />}
+      {completeFor && <PracticalCompleteModal c={completeFor.c} startEditing={completeFor.edit} store={store} onClose={() => setCompleteFor(null)} />}
       {slotReviewFor && <SlotReviewModal c={slotReviewFor} store={store} onClose={() => setSlotReviewFor(null)} />}
       {profileModal === 'edit' && <CoordEditModal store={store} onClose={() => setProfileModal(null)} />}
       {profileModal === 'pw' && <CoordPwModal store={store} onClose={() => setProfileModal(null)} />}
@@ -392,33 +477,17 @@ function OverviewSection({ ctx }) {
   }, []);
   const inFunnel = candidates.filter((c) => P.funnelCol(c.stage));
   const metrics = [
-    { label: 'No funil', value: inFunnel.length, icon: 'people', tone: 'green', section: 'geral' },
-    { label: 'A validar', value: candidates.filter((c) => c.stage === 'validacao').length, icon: 'doc', tone: 'amber', section: 'validacao' },
+    { label: 'No funil', value: inFunnel.length, icon: 'people', tone: 'green', section: 'geral', clickable: false },
     { label: 'Lista de espera', value: candidates.filter((c) => c.stage === 'espera').length, icon: 'clock', tone: 'amber', section: 'espera' },
-    { label: 'Formação prática', value: candidates.filter((c) => c.stage === 'pratica').length, icon: 'book', tone: 'neutral', section: 'agendamentos' },
     { label: 'Pilotos ativos', value: candidates.filter((c) => c.stage === 'ativo').length, icon: 'sparkle', tone: 'green', section: 'ativos' },
   ];
 
   // central única de tarefas que requerem decisão manual
   const tasks = [];
-  candidates.filter((c) => c.stage === 'validacao').forEach((c) => tasks.push({ key: 'val' + c.id, c, kind: 'validar', label: 'Validar candidatura', btn: 'Rever', act: () => setSel(c) }));
-  candidates.filter((c) => c.stage === 'pratica').forEach((c) => {
-    const sc = schedOf(c); const st = getSchedStatus(sc);
-    if (!st || st === 'aguarda_candidato') {
-      const proposed = sc && sc.slots && sc.slots.length;
-      tasks.push({ key: 'sch' + c.id, c, kind: 'agendar',
-        label: proposed ? 'Horários propostos · aguarda resposta do candidato' : 'Propor horários da formação prática',
-        btn: proposed ? 'Editar' : 'Propor', act: () => setSchedFor(c) });
-    } else if (st === 'aguarda_coordenacao') {
-      tasks.push({ key: 'rev' + c.id, c, kind: 'confirmar', label: 'Candidato escolheu um horário · confirmar ou recusar', btn: 'Rever', act: () => setSlotReviewFor(c) });
-    } else if (st === 'candidato_propoe') {
-      tasks.push({ key: 'rev' + c.id, c, kind: 'confirmar', label: 'Candidato propôs um horário alternativo · confirmar ou recusar', btn: 'Rever', act: () => setSlotReviewFor(c) });
-    } else if (st === 'aguarda_telefone') {
-      tasks.push({ key: 'tel' + c.id, c, kind: 'agendar', label: 'Horário recusado · ligar ao candidato e registar horário definitivo', btn: 'Registar', act: () => setSlotReviewFor(c) });
-    } else if (st === 'confirmado') {
-      const confirmedSlot = sc.slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? sc.slots[sc.chosen] : null);
-      if (confirmedSlot) tasks.push({ key: 'cmp' + c.id, c, kind: 'concluir', label: `Confirmar conclusão · ${P.fmtDate(confirmedSlot.date)}`, btn: 'Concluir', act: () => setCompleteFor(c) });
-    }
+  const taskCtx = { schedOf, setSel, setSchedFor, setSlotReviewFor, setCompleteFor };
+  candidates.filter((c) => c.stage === 'validacao' || c.stage === 'pratica').forEach((c) => {
+    const t = pendingTaskFor(c, taskCtx);
+    if (t) tasks.push({ key: t.kind + c.id, c, ...t });
   });
   S.contactRequests.filter((r) => r.status === 'novo').forEach((r) => tasks.push({ key: 'ct' + r.id, name: r.name, kind: 'contacto', label: 'Dúvida do voluntário' + (r.question ? ' — “' + r.question.slice(0, 40) + (r.question.length > 40 ? '…' : '') + '”' : ''), btn: 'Responder', act: () => setSection('contactos') }));
   const kindIcon = { validar: 'doc', agendar: 'clock', confirmar: 'clock', concluir: 'check', contacto: 'chat' };
@@ -428,15 +497,18 @@ function OverviewSection({ ctx }) {
   return (
     <div>
       <div className="pedal-metrics">
-        {metrics.map((m) => (
-          <button key={m.label} className="pedal-metric" onClick={() => setSection(m.section)}>
-            <div className={'pedal-metric-ic ' + m.tone}><Icon name={m.icon} size={18} /></div>
-            <div>
-              <div style={{ font: '800 26px var(--display)', color: 'var(--ink)', lineHeight: 1 }}>{m.value}</div>
-              <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)', marginTop: 3 }}>{m.label}</div>
-            </div>
-          </button>
-        ))}
+        {metrics.map((m) => {
+          const Tag = m.clickable === false ? 'div' : 'button';
+          return (
+            <Tag key={m.label} className={'pedal-metric' + (m.clickable === false ? ' static' : '')} {...(m.clickable === false ? {} : { onClick: () => setSection(m.section) })}>
+              <div className={'pedal-metric-ic ' + m.tone}><Icon name={m.icon} size={18} /></div>
+              <div>
+                <div style={{ font: '800 26px var(--display)', color: 'var(--ink)', lineHeight: 1 }}>{m.value}</div>
+                <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)', marginTop: 3 }}>{m.label}</div>
+              </div>
+            </Tag>
+          );
+        })}
       </div>
 
       {/* Funil de ponta a ponta — a toda a largura */}
@@ -486,9 +558,16 @@ function OverviewSection({ ctx }) {
                           {c.live && <span className="pedal-livedot" title="Em direto" />}
                         </button>
                         {task && (
-                          <button className="pedal-taskbtn primary" style={{ padding: '5px 10px', fontSize: 11, flexShrink: 0 }} onClick={task.act}>
-                            {task.btn}
-                          </button>
+                          <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                            {task.btn2 && (
+                              <button className="pedal-taskbtn" style={{ padding: '5px 10px', fontSize: 11 }} onClick={task.act2}>
+                                {task.btn2}
+                              </button>
+                            )}
+                            <button className="pedal-taskbtn primary" style={{ padding: '5px 10px', fontSize: 11 }} onClick={task.act}>
+                              {task.btn}
+                            </button>
+                          </div>
                         )}
                       </div>
                     );
@@ -535,7 +614,7 @@ function ValidationList({ ctx }) {
           ))}
         </div>
       )}
-      <p className="pedal-tasknote">Abre o candidato para ver a entrevista, validar ou rejeitar.</p>
+      <p className="pedal-tasknote">Abre o candidato para ver o questionário, validar ou rejeitar.</p>
     </div>
   );
 }
@@ -564,7 +643,6 @@ function WaitingList({ ctx }) {
 
   const resumeOne = (c) => {
     if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
-    else { store.setOverride(c.id, 'validacao'); }
     store.patchRealCandidate(c.id, { stage: 'validacao' });
     if (!isLiveCandidate(c) && store.coordJwt) {
       fetch(`/api/candidates/${c.id}`, {
@@ -825,7 +903,7 @@ function AgendamentosSection({ ctx }) {
                   notes={sc.notes || ''}
                   onEdit={() => setSchedFor(c)}
                   onReview={() => setSlotReviewFor(c)}
-                  onComplete={() => setCompleteFor(c)}
+                  onComplete={() => setCompleteFor({ c, edit: false })}
                   onSaveNotes={(notes) => store.setScheduling(c.id, { notes })}
                   onSeeProfile={() => setSel(c)}
                 />
@@ -913,7 +991,7 @@ function PlanningRow({ c, slot, trainer, station, notes, onEdit, onReview, onCom
 
       {/* Coluna 3: ações */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center', minWidth: 130 }}>
-        <button className="pedal-taskbtn primary" onClick={onComplete}><Icon name="check" size={14} color="#fff" />Concluir</button>
+        <button className="pedal-taskbtn primary" onClick={onComplete}><Icon name="check" size={14} color="#fff" />Terminar</button>
         <button className="pedal-taskbtn" onClick={onEdit}>Editar plano</button>
         {onReview && <button className="pedal-taskbtn" style={{ color: 'var(--accent-deep)', borderColor: 'var(--accent)' }} onClick={onReview}>Cancelar horário</button>}
       </div>
@@ -976,7 +1054,7 @@ function exportCandidates(rows, store, fileId) {
   const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const lines = [cols.join(';')];
   rows.forEach((c) => {
-    const sc = c.scheduling || store.S.scheduling[c.id] || null;
+    const sc = store.S.scheduling[c.id] || c.scheduling || null;
     const ag = sc && sc.chosen != null && sc.slots && sc.slots[sc.chosen] ? `${P.fmtDate(sc.slots[sc.chosen].date)} ${sc.slots[sc.chosen].time}` : '';
     const trainer = sc && sc.trainerId ? ((store.realTrainers || []).find((t) => t.id === sc.trainerId) || {}).name || '' : '';
     // disponibilidade: usa availability (dia+período) se disponível, senão periods
@@ -1358,18 +1436,18 @@ function SchedulingModal({ c, store, onClose }) {
 
 function SlotReviewModal({ c, store, onClose }) {
   const P = window.PEDAL;
-  const sc = c.scheduling || store.S.scheduling[c.id] || {};
+  const sc = store.S.scheduling[c.id] || c.scheduling || {};
   const slots = sc.slots || [];
   const status = sc.status || '';
   const trainer = sc.trainerId ? (store.realTrainers || []).find((t) => t.id === sc.trainerId) : null;
   const station = sc.stationId ? (store.realStations || []).find((s) => s.id === sc.stationId) : null;
 
-  const reviewSlot = status === 'aguarda_coordenacao' ? slots.find((s) => s.state === 'selecionado')
-    : status === 'candidato_propoe' ? slots.find((s) => s.state === 'proposto_candidato')
-    : (status === 'confirmado' || sc.chosen != null) ? (slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? slots[sc.chosen] : null))
-    : null;
+  const reviewSlots = status === 'aguarda_coordenacao' ? slots.filter((s) => s.state === 'selecionado' || s.state === 'recusado')
+    : status === 'candidato_propoe' ? slots.filter((s) => s.state === 'proposto_candidato')
+    : [];
+  const reviewSlot = (status === 'confirmado' || sc.chosen != null) ? (slots.find((s) => s.state === 'confirmado' || s.state === 'definitivo') || (sc.chosen != null ? slots[sc.chosen] : null)) : null;
 
-  const [refusing, setRefusing] = useStateD(false);
+  const [refusingSlot, setRefusingSlot] = useStateD(null);
   const [refuseReason, setRefuseReason] = useStateD('');
   const [doneAction, setDoneAction] = useStateD(null);
   const [defDate, setDefDate] = useStateD('');
@@ -1391,13 +1469,13 @@ function SlotReviewModal({ c, store, onClose }) {
     }
   };
 
-  const confirmSlot = () => {
-    if (!reviewSlot) return;
-    const label = fmtSlot(reviewSlot);
+  const confirmSlot = (slot) => {
+    if (!slot) return;
+    const label = fmtSlot(slot);
     let msg = `✅ A tua formação prática foi confirmada para ${label}!`;
     if (station) msg += ` Encontram-se em ${station.name}${station.address ? ` — ${station.address}` : ''}.`;
     if (trainer) msg += ` O teu coach é ${trainer.name}${trainer.phone ? ` (${trainer.phone})` : ''}.`;
-    const newSlots = slots.map((s) => s === reviewSlot ? { ...s, state: 'confirmado' } : s);
+    const newSlots = slots.map((s) => s === slot ? { ...s, state: 'confirmado' } : s);
     const notifs = [...(sc.chatNotify || []),
       { id: 'cn' + Math.random().toString(36).slice(2, 7), text: msg, shown: false },
       { id: 'cn' + Math.random().toString(36).slice(2, 7), text: '📞 Para qualquer remarcação ou desmarcação, contacta-nos por telefone para o 123456789.', shown: false },
@@ -1407,15 +1485,25 @@ function SlotReviewModal({ c, store, onClose }) {
     setDoneAction('confirmed');
   };
 
-  const refuseSlot = () => {
-    if (!refuseReason.trim() || !reviewSlot) return;
-    const label = fmtSlot(reviewSlot);
-    const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. A equipa Pedalar Sem Idade vai contactar-te por telefone para combinarem uma data que sirva a todos.`;
-    const newSlots = slots.map((s) => s === reviewSlot ? { ...s, state: 'recusado', rejectionReason: refuseReason.trim() } : s);
-    const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
-    patchSched({ ...sc, slots: newSlots, status: 'aguarda_telefone', chatNotify: notifs });
-    store.notify({ type: 'agendado', who: c.name, text: `horário recusado — a equipa deve contactar o voluntário por telefone` });
-    setRefusing(false); setRefuseReason(''); setDoneAction('refused');
+  const refuseSlot = (slot) => {
+    if (!refuseReason.trim() || !slot) return;
+    const label = fmtSlot(slot);
+    const newSlots = slots.map((s) => s === slot ? { ...s, state: 'recusado', rejectionReason: refuseReason.trim() } : s);
+    // Se ainda há outros horários escolhidos pelo voluntário a aguardar decisão, não avança para a fase de contacto telefónico.
+    const stillPending = status === 'aguarda_coordenacao' && newSlots.some((s) => s.state === 'selecionado');
+    if (stillPending) {
+      const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. Estamos a analisar as outras opções que escolheste.`;
+      const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
+      patchSched({ ...sc, slots: newSlots, chatNotify: notifs });
+      store.notify({ type: 'agendado', who: c.name, text: `recusou um dos horários escolhidos — restam outros por rever` });
+      setRefusingSlot(null); setRefuseReason('');
+    } else {
+      const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. A equipa Pedalar Sem Idade vai contactar-te por telefone para combinarem uma data que sirva a todos.`;
+      const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
+      patchSched({ ...sc, slots: newSlots, status: 'aguarda_telefone', chatNotify: notifs });
+      store.notify({ type: 'agendado', who: c.name, text: `horário recusado — a equipa deve contactar o voluntário por telefone` });
+      setRefusingSlot(null); setRefuseReason(''); setDoneAction('refused');
+    }
   };
 
   const setDefinitive = () => {
@@ -1462,34 +1550,48 @@ function SlotReviewModal({ c, store, onClose }) {
         <div style={{ font: '800 19px var(--display)', color: 'var(--ink)' }}>Formação prática</div>
         <div style={{ font: '500 13px var(--ui)', color: 'var(--ink-soft)', marginTop: 2 }}>{c.name} · {c.locality}</div>
 
-        {/* Candidato escolheu um horário ou propôs um alternativo */}
-        {(status === 'aguarda_coordenacao' || status === 'candidato_propoe') && reviewSlot && (
+        {/* Candidato escolheu um ou mais horários, ou propôs um alternativo */}
+        {(status === 'aguarda_coordenacao' || status === 'candidato_propoe') && reviewSlots.length > 0 && (
           <>
-            <div style={lbl}>{status === 'candidato_propoe' ? 'Horário proposto pelo voluntário' : 'Horário escolhido pelo voluntário'}</div>
-            <div style={{ border: '1.5px solid var(--line)', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Icon name="clock" size={16} color="var(--ink-soft)" />
-                <div style={{ flex: 1 }}>
-                  <div style={{ font: '700 14px var(--ui)', color: 'var(--ink)' }}>{P.fmtDate(reviewSlot.date)}</div>
-                  <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>{reviewSlot.startTime || reviewSlot.time || ''} · duração aprox. 2h</div>
-                </div>
-              </div>
-              {!refusing && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <button className="pedal-btn primary" style={{ flex: 1 }} onClick={confirmSlot}>Confirmar</button>
-                  <button className="pedal-btn" style={{ flex: 1, color: 'var(--accent-deep)', borderColor: 'var(--accent)' }} onClick={() => setRefusing(true)}>Recusar</button>
-                </div>
-              )}
-              {refusing && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ font: '600 12px var(--ui)', color: 'var(--ink)', marginBottom: 6 }}>Motivo da recusa (obrigatório)</div>
-                  <textarea className="pedal-agentinfo" value={refuseReason} onChange={(e) => setRefuseReason(e.target.value)} placeholder="Ex.: Sem disponibilidade · coach indisponível…" style={{ background: 'var(--surface)', minHeight: 64, fontSize: 12.5 }} autoFocus />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                    <button className="pedal-taskbtn" onClick={() => { setRefusing(false); setRefuseReason(''); }}>Cancelar</button>
-                    <button className="pedal-taskbtn primary" style={{ opacity: refuseReason.trim() ? 1 : 0.45 }} disabled={!refuseReason.trim()} onClick={refuseSlot}>Confirmar recusa</button>
+            <div style={lbl}>{status === 'candidato_propoe' ? 'Horário proposto pelo voluntário' : reviewSlots.length > 1 ? 'Horários escolhidos pelo voluntário' : 'Horário escolhido pelo voluntário'}</div>
+            {reviewSlots.length > 1 && (
+              <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 12px' }}>O voluntário aceitou mais do que um horário. Confirma o que ficar definitivo — os outros deixam de ser necessários.</p>
+            )}
+            <div style={{ display: 'grid', gap: 10, marginBottom: 14 }}>
+              {reviewSlots.map((slot, idx) => {
+                const isRefused = slot.state === 'recusado';
+                return (
+                  <div key={idx} style={{ border: '1.5px solid var(--line)', borderRadius: 12, padding: '14px 16px', opacity: isRefused ? 0.65 : 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Icon name="clock" size={16} color="var(--ink-soft)" />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ font: '700 14px var(--ui)', color: 'var(--ink)' }}>{P.fmtDate(slot.date)}</div>
+                        <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>{slot.startTime || slot.time || ''} · duração aprox. 2h</div>
+                      </div>
+                      {isRefused && <Pill tone="neutral">Recusado</Pill>}
+                    </div>
+                    {isRefused && slot.rejectionReason && (
+                      <div style={{ font: '500 12px/1.5 var(--ui)', color: 'var(--ink-soft)', marginTop: 10 }}><strong style={{ color: 'var(--ink)' }}>Motivo:</strong> {slot.rejectionReason}</div>
+                    )}
+                    {!isRefused && refusingSlot !== slot && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        <button className="pedal-btn primary" style={{ flex: 1 }} onClick={() => confirmSlot(slot)}>Confirmar</button>
+                        <button className="pedal-btn" style={{ flex: 1, color: 'var(--accent-deep)', border: '1.5px solid var(--accent)' }} onClick={() => { setRefusingSlot(slot); setRefuseReason(''); }}>Recusar</button>
+                      </div>
+                    )}
+                    {!isRefused && refusingSlot === slot && (
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ font: '600 12px var(--ui)', color: 'var(--ink)', marginBottom: 6 }}>Motivo da recusa (obrigatório)</div>
+                        <textarea className="pedal-agentinfo" value={refuseReason} onChange={(e) => setRefuseReason(e.target.value)} placeholder="Ex.: Sem disponibilidade · coach indisponível…" style={{ background: 'var(--surface)', minHeight: 64, fontSize: 12.5 }} autoFocus />
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                          <button className="pedal-taskbtn" onClick={() => { setRefusingSlot(null); setRefuseReason(''); }}>Cancelar</button>
+                          <button className="pedal-taskbtn primary" style={{ opacity: refuseReason.trim() ? 1 : 0.45 }} disabled={!refuseReason.trim()} onClick={() => refuseSlot(slot)}>Confirmar recusa</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })}
             </div>
             {(trainer || station) && (
               <div style={{ display: 'grid', gap: 8 }}>
@@ -1584,7 +1686,7 @@ function SlotReviewModal({ c, store, onClose }) {
           </>
         )}
 
-        {!reviewSlot && status !== 'aguarda_telefone' && (
+        {!reviewSlot && reviewSlots.length === 0 && status !== 'aguarda_telefone' && (
           <div className="pedal-taskempty" style={{ marginTop: 16 }}><Icon name="clock" size={16} color="var(--ink-soft)" />Sem horários pendentes de revisão.</div>
         )}
       </div>
@@ -1598,6 +1700,8 @@ function CandidateDetail({ c, store, onClose }) {
   const [rejecting, setRejecting] = useStateD(false);
   const [reason, setReason] = useStateD('');
   const readOnly = false;
+  // garante dados frescos ao abrir o perfil, sem esperar pelo poll de 5s
+  useEffectD(() => { store.refreshCandidates && store.refreshCandidates(); }, []);
   const isLiveC = c.live || c.id === store.S.candidateId;
   const curIdx = P.stageIndex(c.stage);
   const iv = isLiveC
@@ -1611,7 +1715,7 @@ function CandidateDetail({ c, store, onClose }) {
     : Array.isArray(c.chat_messages) ? c.chat_messages.filter((m) => m.text) : [];
 
   function doReject() {
-    if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); } else { store.setOverride(c.id, 'rejeitado'); }
+    if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); }
     store.patchRealCandidate(c.id, { stage: 'rejeitado' });
     if (!isLiveC && store.coordJwt) {
       fetch(`/api/candidates/${c.id}`, {
@@ -1642,15 +1746,9 @@ function CandidateDetail({ c, store, onClose }) {
           <DetailItem label="Email" value={c.email || '—'} />
           <DetailItem label="Telefone" value={c.contact || '—'} />
           <DetailItem label="Data de nascimento" value={c.dob ? `${P.fmtDate(c.dob)}${age != null ? ` · ${age} anos` : ''}` : '—'} />
-          {(c.availability && c.availability.length) ? (
-            <div className="pedal-detailitem" style={{ gridColumn: '1 / -1' }}>
-              <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 6 }}>Disponibilidade</div>
-              <AvailabilityGrid value={c.availability} readOnly />
-            </div>
-          ) : (
-            <DetailItem label="Disponibilidade" value={(c.periods && c.periods.length) ? c.periods.map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') : '—'} />
-          )}
           {c.nif && <DetailItem label="NIF" value={c.nif} />}
+          {c.cc && <DetailItem label="Cartão de Cidadão" value={c.cc} />}
+          {c.profissao && <DetailItem label="Profissão" value={c.profissao} />}
           {(c.rua || c.porta || c.codigo_postal || c.cidade) && (
             <div className="pedal-detailitem" style={{ gridColumn: '1 / -1' }}>
               <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 3 }}>Morada</div>
@@ -1663,21 +1761,59 @@ function CandidateDetail({ c, store, onClose }) {
           <DetailItem label="No funil há" value={c.days === 0 ? 'hoje' : c.days + ' dias'} />
         </div>
 
-        {c.signature && c.signature.startsWith('data:image') && (
-          <div style={{ marginTop: 14 }}>
-            <div style={{ font: '500 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 6 }}>Assinatura</div>
-            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: 8, display: 'inline-block' }}>
-              <img src={c.signature} alt="Assinatura" style={{ display: 'block', maxWidth: 320, height: 'auto', borderRadius: 6 }} />
-            </div>
-          </div>
-        )}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 8 }}>Disponibilidade</div>
+          {(c.availability && c.availability.length) ? (() => {
+            const locs = store.realLocalities || P.LOCALITIES;
+            const locName = (id) => (locs.find((l) => l.id === id) || {}).name || id;
+            const dayName = (id) => (P.WEEKDAYS.find((w) => w.id === id) || {}).name || id;
+            const perName = (id) => (P.PERIODS.find((p) => p.id === id) || {}).name || id;
+            const byLoc = {};
+            c.availability.forEach((a) => { const key = a.localityId || '_sem'; (byLoc[key] = byLoc[key] || []).push(a); });
+            const keys = Object.keys(byLoc);
+            return keys.map((key) => (
+              <div key={key} style={{ marginBottom: 12 }}>
+                <div style={{ font: '700 12px var(--ui)', color: 'var(--ink)', marginBottom: 6 }}>{key === '_sem' ? 'Sem localidade associada' : locName(key)}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {byLoc[key].map((a, i) => (
+                    <span key={i} className="pedal-pick small on">{dayName(a.day)} · {perName(a.period)}</span>
+                  ))}
+                </div>
+              </div>
+            ));
+          })() : (
+            <DetailItem label="Disponibilidade" value={(c.periods && c.periods.length) ? c.periods.map((p) => (P.PERIODS.find((x) => x.id === p) || {}).name).join(', ') : '—'} />
+          )}
+        </div>
 
         {c.rejectReason && (
           <div style={{ marginTop: 12, background: 'var(--app-bg)', borderRadius: 11, padding: '10px 12px', font: '500 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)' }}><strong style={{ color: 'var(--ink)' }}>Motivo da rejeição:</strong> {c.rejectReason}</div>
         )}
 
+        {Object.keys(iv).length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 8 }}>Resultado do questionário</div>
+            <div className="pedal-detailbox" style={{ marginTop: 0, display: 'grid', gap: 11 }}>
+              {(() => {
+                const known = (P.INTERVIEW || []).filter((q) => iv[q.id]);
+                const knownIds = known.map((q) => q.id);
+                const extra = Object.keys(iv).filter((k) => !knownIds.includes(k));
+                return [
+                  ...known.map((q) => ({ key: q.id, q: q.q, a: iv[q.id] })),
+                  ...extra.map((k) => ({ key: k, q: ivLabels[k] || k, a: iv[k] })),
+                ].map((row) => (
+                  <div key={row.key}>
+                    <div style={{ font: '600 12px/1.4 var(--ui)', color: 'var(--ink-soft)' }}>{row.q}</div>
+                    <div style={{ font: '700 13.5px/1.4 var(--ui)', color: 'var(--ink)', marginTop: 3, display: 'flex', gap: 7, alignItems: 'flex-start' }}><span style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 1 }}><Icon name="check" size={14} /></span>{row.a}</div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        )}
+
         {(() => {
-          const sc2 = c.scheduling || store.S.scheduling[c.id];
+          const sc2 = store.S.scheduling[c.id] || c.scheduling;
           if (!sc2 || !((sc2.slots && sc2.slots.length) || sc2.trainerId)) return null;
           const chosen = sc2.chosen != null && sc2.slots ? sc2.slots[sc2.chosen] : null;
           const tr = sc2.trainerId ? (store.realTrainers || []).find((t) => t.id === sc2.trainerId) : null;
@@ -1694,24 +1830,11 @@ function CandidateDetail({ c, store, onClose }) {
           );
         })()}
 
-        {Object.keys(iv).length > 0 && (
+        {c.signature && c.signature.startsWith('data:image') && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 8 }}>Resultado da entrevista</div>
-            <div className="pedal-detailbox" style={{ marginTop: 0, display: 'grid', gap: 11 }}>
-              {(() => {
-                const known = (P.INTERVIEW || []).filter((q) => iv[q.id]);
-                const knownIds = known.map((q) => q.id);
-                const extra = Object.keys(iv).filter((k) => !knownIds.includes(k));
-                return [
-                  ...known.map((q) => ({ key: q.id, q: q.q, a: iv[q.id] })),
-                  ...extra.map((k) => ({ key: k, q: ivLabels[k] || k, a: iv[k] })),
-                ].map((row) => (
-                  <div key={row.key}>
-                    <div style={{ font: '600 12px/1.4 var(--ui)', color: 'var(--ink-soft)' }}>{row.q}</div>
-                    <div style={{ font: '700 13.5px/1.4 var(--ui)', color: 'var(--ink)', marginTop: 3, display: 'flex', gap: 7, alignItems: 'flex-start' }}><span style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 1 }}><Icon name="check" size={14} /></span>{row.a}</div>
-                  </div>
-                ));
-              })()}
+            <div style={{ font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', marginBottom: 8 }}>Assinatura</div>
+            <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: 8, display: 'inline-block' }}>
+              <img src={c.signature} alt="Assinatura" style={{ display: 'block', maxWidth: 320, height: 'auto', borderRadius: 6 }} />
             </div>
           </div>
         )}
@@ -1741,7 +1864,6 @@ function CandidateDetail({ c, store, onClose }) {
               <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }}
                 onClick={() => {
                   if (isLiveC) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
-                  else { store.setOverride(c.id, 'espera'); }
                   store.patchRealCandidate(c.id, { stage: 'espera' });
                   store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
                   onClose();
@@ -1750,7 +1872,6 @@ function CandidateDetail({ c, store, onClose }) {
             <button className="pedal-btn primary" style={{ width: '100%' }}
               onClick={() => {
                 if (isLiveC) { store.up({ validated: true }); store.setStage('onboarding'); }
-                else { store.setOverride(c.id, 'onboarding'); }
                 store.patchRealCandidate(c.id, { stage: 'onboarding' });
                 store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
                 onClose();
@@ -2233,6 +2354,9 @@ function StationsAdmin({ store }) {
   const stations = store.realStations || [];
   const [f, setF] = useStateD({ name: '', locality: '', address: '', note: '' });
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const [editingId, setEditingId] = useStateD(null);
+  const [editF, setEditF] = useStateD({ name: '', locality: '', address: '', note: '' });
+  const setEdit = (k, v) => setEditF((p) => ({ ...p, [k]: v }));
   // localidades disponíveis = BD + as já usadas em locais criados (sem duplicar)
   const locOptions = (() => {
     const seen = [];
@@ -2242,6 +2366,14 @@ function StationsAdmin({ store }) {
   })();
   const valid = f.name.trim().length > 1 && f.locality.trim();
   const submit = () => { if (!valid) return; store.addStation({ name: f.name.trim(), locality: f.locality.trim(), address: f.address.trim(), note: f.note.trim() }); setF({ name: '', locality: '', address: '', note: '' }); };
+  const startEdit = (s) => { setEditingId(s.id); setEditF({ name: s.name || '', locality: s.locality || '', address: s.address || '', note: s.note || '' }); };
+  const cancelEdit = () => setEditingId(null);
+  const editValid = editF.name.trim().length > 1 && editF.locality.trim();
+  const saveEdit = () => {
+    if (!editValid) return;
+    store.updateStation(editingId, { name: editF.name.trim(), locality: editF.locality.trim(), address: editF.address.trim(), note: editF.note.trim() });
+    setEditingId(null);
+  };
   return (
     <div className="pedal-dashgrid">
       <div className="pedal-panel">
@@ -2251,7 +2383,21 @@ function StationsAdmin({ store }) {
           <div className="pedal-taskempty"><Icon name="pin" size={16} color="var(--ink-soft)" />Ainda sem locais.</div>
         ) : (
           <div style={{ display: 'grid', gap: 8 }}>
-            {stations.map((s) => (
+            {stations.map((s) => editingId === s.id ? (
+              <div key={s.id} className="pedal-stationrow" style={{ display: 'grid', gap: 8 }}>
+                <input className="pedal-input" style={{ height: 36, fontSize: 13 }} value={editF.name} onChange={(e) => setEdit('name', e.target.value)} placeholder="Nome do local" autoFocus />
+                <select className="pedal-select" style={{ minWidth: 0, width: '100%', height: 36 }} value={editF.locality} onChange={(e) => setEdit('locality', e.target.value)}>
+                  <option value="">—</option>
+                  {locOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+                <input className="pedal-input" style={{ height: 36, fontSize: 13 }} value={editF.address} onChange={(e) => setEdit('address', e.target.value)} placeholder="Morada" />
+                <input className="pedal-input" style={{ height: 36, fontSize: 13 }} value={editF.note} onChange={(e) => setEdit('note', e.target.value)} placeholder="Nota (opcional)" />
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="pedal-iconbtn" title="Cancelar" onClick={cancelEdit}>✕</button>
+                  <button className="pedal-iconbtn" title="Guardar" disabled={!editValid} style={{ color: 'var(--primary-deep)', opacity: editValid ? 1 : 0.45 }} onClick={saveEdit}>✓</button>
+                </div>
+              </div>
+            ) : (
               <div key={s.id} className="pedal-stationrow">
                 <span style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 1 }}><Icon name="pin" size={18} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -2259,6 +2405,7 @@ function StationsAdmin({ store }) {
                   {s.address && <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>{s.address}</div>}
                   {s.note && <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)', marginTop: 2 }}>{s.note}</div>}
                 </div>
+                <button className="pedal-iconbtn" title="Editar" onClick={() => startEdit(s)} style={{ fontSize: 15 }}>✎</button>
                 <button className="pedal-iconbtn" title="Remover" onClick={() => store.removeStation(s.id)}>✕</button>
               </div>
             ))}
@@ -2327,7 +2474,9 @@ function AnalyticsScreen({ ctx }) {
   const formadores = (store.realTrainers || []).length;
 
   const byStage = P.STAGES.filter((s) => s.id !== 'rejeitado').map((s) => ({ label: s.label, n: candidates.filter((c) => c.stage === s.id).length })).filter((x) => x.n > 0);
-  const byLoc = P.LOCALITIES.map((l) => ({ label: l.name, n: candidates.filter((c) => c.localityId === l.id || c.locality === l.name).length })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
+  const allLocs = store.realLocalities || P.LOCALITIES;
+  const inLocality = (c, name) => !!(c.locality && c.locality.includes(name));
+  const byLoc = allLocs.map((l) => ({ label: l.name, n: candidates.filter((c) => c.localityId === l.id || inLocality(c, l.name)).length })).sort((a, b) => b.n - a.n);
   // conversas & tópicos (ilustrativo a partir da base de conhecimento + pedidos)
   const conversas = total + (store.S.contactRequests || []).length;
   // tópicos mais consultados — agregados por categoria (sem duplicados)
@@ -2361,15 +2510,14 @@ function AnalyticsScreen({ ctx }) {
         ))}
       </div>
 
-      <div className="pedal-dashgrid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div className="pedal-panel">
-          <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Pilotos por estado</span></div>
-          <BarChart rows={byStage} color="var(--primary)" />
-        </div>
-        <div className="pedal-panel">
-          <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Pilotos por localidade</span></div>
-          <BarChart rows={byLoc} color="var(--accent-deep)" />
-        </div>
+      <div className="pedal-panel">
+        <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Pilotos por estado</span></div>
+        <BarChart rows={byStage} color="var(--primary)" />
+      </div>
+
+      <div className="pedal-panel" style={{ marginTop: 18 }}>
+        <div className="pedal-panelhead"><span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Pilotos por localidade</span></div>
+        <BarChart rows={byLoc} color="var(--accent-deep)" />
       </div>
 
       <div className="pedal-dashgrid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 18 }}>
