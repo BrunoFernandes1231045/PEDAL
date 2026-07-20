@@ -221,7 +221,7 @@ function Dashboard({ store }) {
           {allowedTabs.includes('gestao') && <button className={screen === 'gestao' ? 'on' : ''} onClick={() => setScreen('gestao')}><Icon name="shield" size={15} />Gestão</button>}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
+        <div className="pedal-headeractions" style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
           <ExportMenu candidates={candidates} store={store} />
           <button className="pedal-bellbtn" onClick={() => setNotifOpen((o) => !o)} title="Notificações" aria-label="Notificações">
             <Icon name="bell" size={18} />

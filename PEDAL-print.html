@@ -178,7 +178,7 @@ input{font-family:inherit;}
 .pedal-dashwrap{flex:1; min-height:0; overflow-y:auto; padding:0 0 40px;}
 .pedal-dash{max-width:1120px; margin:0 auto; padding:24px 28px;}
 .pedal-dashhead{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px;}
-.pedal-coorduser{display:flex; align-items:center; gap:10px; font:600 13px var(--ui); color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 14px 6px 6px;}
+.pedal-coorduser{display:flex; align-items:center; gap:10px; font:600 13px var(--ui); color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 14px 6px 6px; white-space:nowrap; flex-shrink:0;}
 .pedal-coordav{width:32px; height:32px; border-radius:50%; background:var(--accent-soft); color:var(--accent-deep); display:flex; align-items:center; justify-content:center; font:800 12px var(--ui);}
 .pedal-metrics{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px;}
 .pedal-metric{display:flex; align-items:center; gap:13px; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px 18px; width:100%; text-align:left; cursor:pointer; transition:border-color .15s, transform .15s, box-shadow .15s;}
@@ -323,7 +323,7 @@ input{font-family:inherit;}
 .pedal-listrow:hover{border-color:var(--primary); transform:translateY(-1px);}
 
 /* export */
-.pedal-exportbtn{display:flex; align-items:center; gap:7px; height:40px; padding:0 14px; border-radius:11px; border:1.5px solid var(--primary); background:var(--surface); color:var(--primary-deep); font:700 13px var(--ui); transition:.15s;}
+.pedal-exportbtn{display:flex; align-items:center; gap:7px; height:40px; padding:0 14px; border-radius:11px; border:1.5px solid var(--primary); background:var(--surface); color:var(--primary-deep); font:700 13px var(--ui); transition:.15s; white-space:nowrap; flex-shrink:0;}
 .pedal-exportbtn:hover{background:var(--primary-soft);}
 .pedal-exportbtn.small{height:32px; padding:0 11px; font-size:12px; border-width:1px;}
 .pedal-exporthint{font:500 11px/1.45 var(--ui); color:var(--ink-soft); padding:6px 12px 8px; border-bottom:1px solid var(--line); margin-bottom:4px;}
@@ -427,6 +427,9 @@ input{font-family:inherit;}
   .pedal-topnav{max-width:100%; overflow-x:auto;}
   .pedal-topnav button{padding:7px 10px; font-size:12px; gap:5px; white-space:nowrap;}
   .pedal-brandmini span{display:none;}
+  .pedal-dashhead{flex-wrap:wrap;}
+  .pedal-headeractions{width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; justify-content:flex-end;}
+  .pedal-bellbtn{flex-shrink:0;}
 }
 </style>
 </head>
