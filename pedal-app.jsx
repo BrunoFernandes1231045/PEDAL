@@ -131,7 +131,8 @@ function App() {
         const sched = data.scheduling || null;
         const candId = S.candidateId;
         // stages definidos pela coordenação que o candidato precisa de receber
-        const coordStages = ['formalizacao', 'ativo', 'rejeitado'];
+        const coordStages = ['onboarding', 'formalizacao', 'ativo', 'rejeitado'];
+        const validatedStages = ['onboarding', 'pratica', 'formalizacao', 'ativo'];
         const stageSync = data.stage && coordStages.includes(data.stage) ? data.stage : null;
         if (msgs || cn || sched || stageSync) {
           setS((p) => ({
@@ -139,6 +140,7 @@ function App() {
             ...(msgs ? { messages: msgs } : {}),
             ...(sched && candId ? { scheduling: { ...p.scheduling, [candId]: sched } } : {}),
             ...(stageSync && stageSync !== p.stage ? { stage: stageSync } : {}),
+            ...(stageSync && validatedStages.includes(stageSync) && !p.validated ? { validated: true } : {}),
             chat: cn ? { ...p.chat, node: cn, restoreInteraction: !!(msgs && msgs.length > 0) } : p.chat,
           }));
         }
@@ -172,9 +174,13 @@ function App() {
               }
             }
             // sincroniza stages definidos pela coordenação
-            const coordStages = ['formalizacao', 'ativo', 'rejeitado'];
+            const coordStages = ['onboarding', 'formalizacao', 'ativo', 'rejeitado'];
+            const validatedStages = ['onboarding', 'pratica', 'formalizacao', 'ativo'];
             if (data.stage && coordStages.includes(data.stage) && data.stage !== p.stage) {
               next = { ...next, stage: data.stage };
+            }
+            if (data.stage && validatedStages.includes(data.stage) && !p.validated) {
+              next = { ...next, validated: true };
             }
             return next;
           });
