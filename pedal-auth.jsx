@@ -373,7 +373,7 @@ function ProfileView({ store }) {
         </div>
 
         {/* Sessão + conta */}
-        <button className="pedal-listrow" style={{ marginTop: 14 }} onClick={() => store.setSession(false)}>
+        <button className="pedal-listrow" style={{ marginTop: 14 }} onClick={() => { store.setCandidateJwt(null); store.reset(); }}>
           <span className="pedal-headbtn" style={{ width: 34, height: 34 }}><Icon name="arrow" size={16} color="var(--primary)" /></span>
           <span style={{ flex: 1, textAlign: 'left', font: '700 13.5px var(--ui)', color: 'var(--ink)' }}>Terminar sessão</span>
         </button>
