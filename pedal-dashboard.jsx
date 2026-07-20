@@ -172,16 +172,15 @@ function Dashboard({ store }) {
   const isLiveCandidate = (c) => c.live || c.id === S.candidateId;
 
   function validate(c) {
-    if (isLiveCandidate(c)) { store.up({ validated: true }); store.setStage('onboarding'); }
-    store.patchRealCandidate(c.id, { stage: 'onboarding' });
-    if (!isLiveCandidate(c) && store.coordJwt) {
-      fetch(`/api/candidates/${c.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
-        body: JSON.stringify({ stage: 'onboarding' }),
-      }).catch(() => {});
+    if (isLiveCandidate(c)) {
+      store.up({ validated: true }); store.setStage('onboarding');
+      store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+      return;
     }
-    store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+    store.patchCandidateStage(c.id, 'onboarding').then((res) => {
+      if (!res.ok) { alert(res.error || 'Não foi possível validar. Tenta novamente.'); return; }
+      store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+    });
   }
   const schedOf = (c) => {
     const local = S.scheduling[c.id] || null;
@@ -640,17 +639,17 @@ function WaitingList({ ctx }) {
   const toggleAll = () => setSel2(allChecked ? new Set() : new Set(list.map((c) => c.id)));
 
   const resumeOne = (c) => {
-    if (isLiveCandidate(c)) { store.up({ waitingListResumed: true }); store.setStage('validacao'); }
-    store.patchRealCandidate(c.id, { stage: 'validacao' });
-    if (!isLiveCandidate(c) && store.coordJwt) {
-      fetch(`/api/candidates/${c.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
-        body: JSON.stringify({ stage: 'validacao' }),
-      }).catch(() => {});
+    if (isLiveCandidate(c)) {
+      store.up({ waitingListResumed: true }); store.setStage('validacao');
+      store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
+      setSel(null);
+      return;
     }
-    store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
-    setSel(null);
+    store.patchCandidateStage(c.id, 'validacao').then((res) => {
+      if (!res.ok) { alert(res.error || 'Não foi possível retomar. Tenta novamente.'); return; }
+      store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
+      setSel(null);
+    });
   };
 
   const resumeSelected = () => {
@@ -1724,17 +1723,17 @@ function CandidateDetail({ c, store, onClose }) {
     : Array.isArray(c.chat_messages) ? c.chat_messages.filter((m) => m.text) : [];
 
   function doReject() {
-    if (isLiveC) { store.setStage('rejeitado'); store.up({ rejection: { reason } }); }
-    store.patchRealCandidate(c.id, { stage: 'rejeitado' });
-    if (!isLiveC && store.coordJwt) {
-      fetch(`/api/candidates/${c.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.coordJwt}` },
-        body: JSON.stringify({ stage: 'rejeitado' }),
-      }).catch(() => {});
+    if (isLiveC) {
+      store.setStage('rejeitado'); store.up({ rejection: { reason } });
+      store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
+      onClose();
+      return;
     }
-    store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
-    onClose();
+    store.patchCandidateStage(c.id, 'rejeitado').then((res) => {
+      if (!res.ok) { alert(res.error || 'Não foi possível rejeitar. Tenta novamente.'); return; }
+      store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
+      onClose();
+    });
   }
 
   return (
@@ -1872,18 +1871,32 @@ function CandidateDetail({ c, store, onClose }) {
               <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setRejecting(true)}>Rejeitar</button>
               <button className="pedal-taskbtn" style={{ flex: 1, justifyContent: 'center' }}
                 onClick={() => {
-                  if (isLiveC) { store.up({ pushedToWaitingList: true }); store.setStage('espera'); }
-                  store.patchRealCandidate(c.id, { stage: 'espera' });
-                  store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
-                  onClose();
+                  if (isLiveC) {
+                    store.up({ pushedToWaitingList: true }); store.setStage('espera');
+                    store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
+                    onClose();
+                    return;
+                  }
+                  store.patchCandidateStage(c.id, 'espera').then((res) => {
+                    if (!res.ok) { alert(res.error || 'Não foi possível colocar em lista de espera. Tenta novamente.'); return; }
+                    store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
+                    onClose();
+                  });
                 }}>Lista de espera</button>
             </div>
             <button className="pedal-btn primary" style={{ width: '100%' }}
               onClick={() => {
-                if (isLiveC) { store.up({ validated: true }); store.setStage('onboarding'); }
-                store.patchRealCandidate(c.id, { stage: 'onboarding' });
-                store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
-                onClose();
+                if (isLiveC) {
+                  store.up({ validated: true }); store.setStage('onboarding');
+                  store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+                  onClose();
+                  return;
+                }
+                store.patchCandidateStage(c.id, 'onboarding').then((res) => {
+                  if (!res.ok) { alert(res.error || 'Não foi possível validar. Tenta novamente.'); return; }
+                  store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+                  onClose();
+                });
               }}>
               Validar candidatura ✓
             </button>

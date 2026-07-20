@@ -366,6 +366,21 @@ function App() {
   const setCoordRole = (role) => setCoordRoleRaw(role);
   const clearCoordJwt = () => { setCoordJwtRaw(null); setCoordRoleRaw(null); setRealCandidates(null); setRealTrainers(null); setRealStations(null); setCoordProfileRaw(null); };
   const patchRealCandidate = (id, patch) => setRealCandidates((prev) => prev ? prev.map((c) => c.id === id ? { ...c, ...patch } : c) : prev);
+  // Muda o estado de um candidato real no backend; só actualiza a lista local depois de confirmado.
+  // Se a sessão tiver expirado (401), força novo login em vez de falhar em silêncio.
+  const patchCandidateStage = (id, stage) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
+    return fetch(`/api/candidates/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify({ stage }),
+    }).then((r) => {
+      if (r.status === 401) { clearCoordJwt(); return { ok: false, error: 'A tua sessão expirou. Inicia sessão novamente.' }; }
+      if (!r.ok) return r.json().then((d) => ({ ok: false, error: (d && d.error) || 'Erro ao guardar' })).catch(() => ({ ok: false, error: 'Erro ao guardar' }));
+      patchRealCandidate(id, { stage });
+      return { ok: true };
+    }).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
 
   // Localidades e necessidades: endpoints públicos, carregados na montagem
   useEffectA(() => {
@@ -621,7 +636,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, refreshCandidates, realCandidates, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;
