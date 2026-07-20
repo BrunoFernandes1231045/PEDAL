@@ -28,27 +28,21 @@ PEDAL.SEED_NEEDS = [
   { id: 'nd3', locality: 'Esposende',  periods: ['flex'] },
 ];
 
-// Há vaga aberta para esta localidade + disponibilidade do candidato?
+PEDAL.DAY_TO_FULL = { seg: 'segunda', ter: 'terca', qua: 'quarta', qui: 'quinta', sex: 'sexta', sab: 'sabado', dom: 'domingo' };
+
+// Há vaga aberta para esta localidade num dos dias/períodos exactos escolhidos pelo candidato?
 // schedule: { [localityName]: { [day]: { period: 'manha'|'tarde'|'ambos', count: number } } }
-PEDAL.needMatch = function (schedule, localityName, periods) {
+// availability: [{ day: 'seg'|'ter'|..., period: 'manha'|'tarde'|'flex' }] — só as entradas desta localidade
+PEDAL.needMatch = function (schedule, localityName, availability) {
   if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return false;
   const locData = schedule[(localityName || '')];
   if (!locData) return false;
-  const DAYS = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
-  const covered = new Set();
-  let hasAnyDay = false;
-  for (const day of DAYS) {
-    const cell = locData[day];
-    if (!cell || !cell.period) continue;
-    hasAnyDay = true;
-    if (cell.period === 'manha' || cell.period === 'ambos') covered.add('manha');
-    if (cell.period === 'tarde'  || cell.period === 'ambos') covered.add('tarde');
-  }
-  if (!hasAnyDay) return false;
-  if (covered.has('manha') && covered.has('tarde')) return true;  // cobre todos os períodos
-  const cand = periods || [];
-  if (!cand.length || cand.includes('flex')) return true;
-  return cand.some((p) => covered.has(p));
+  return (availability || []).some(({ day, period }) => {
+    const cell = locData[PEDAL.DAY_TO_FULL[day] || day];
+    if (!cell || !cell.period) return false;
+    if (period === 'flex' || cell.period === 'ambos') return true;
+    return cell.period === period;
+  });
 };
 
 PEDAL.DAY_PT = { segunda: 'Segunda', terca: 'Terça', quarta: 'Quarta', quinta: 'Quinta', sexta: 'Sexta', sabado: 'Sábado', domingo: 'Domingo' };

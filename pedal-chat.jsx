@@ -610,11 +610,12 @@ function ChatView({ store, tone = 'caloroso' }) {
     if (it.type === 'triage') return <TriageForm localities={allLocalities} initial={S.candidate.availability} onSubmit={(d) => {
       patchCandidate({ localities: d.localities, locality: d.locality, periods: d.periods, availability: d.availability });
       setStage('triagem');
-      // Compute match NOW with fresh d.periods — S.candidate is still stale (async React update)
+      // Compute match NOW with fresh d.availability — S.candidate is still stale (async React update)
       const locIds = d.localities && d.localities.length ? d.localities : [d.locality];
       const sel = locIds.map((id) => locOf(id));
-      const open = sel.filter((l) => P.needMatch(store.realNeeds || [], l.name, d.periods));
-      const closed = sel.filter((l) => !P.needMatch(store.realNeeds || [], l.name, d.periods));
+      const availFor = (locId) => d.availability.filter((a) => a.localityId === locId).map((a) => ({ day: a.day, period: a.period }));
+      const open = sel.filter((l, i) => P.needMatch(store.realNeeds || [], l.name, availFor(locIds[i])));
+      const closed = sel.filter((l, i) => !P.needMatch(store.realNeeds || [], l.name, availFor(locIds[i])));
       triageResultRef.current = { open, closed };
       const selNames = locIds.map((id) => locOf(id).name).join(', ');
       const availText = d.availability.map((a) => {
