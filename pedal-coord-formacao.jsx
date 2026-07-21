@@ -1,7 +1,7 @@
 /* pedal-coord-formacao.jsx — Fase 3 (coordenação):
    confirmar/rejeitar o fim da formação prática + upload de vídeos e info por fase */
 
-const { useState: useStateCF, useRef: useRefCF } = React;
+const { useState: useStateCF, useRef: useRefCF, useEffect: useEffectCF } = React;
 
 // ── Modal: confirmar conclusão ou rejeitar o piloto na formação prática ──
 function PracticalCompleteModal({ c, store, onClose, startEditing }) {
@@ -209,6 +209,88 @@ function PracticalCompleteModal({ c, store, onClose, startEditing }) {
 }
 
 // ── Gestão de conteúdos de formação: vídeos e info do agente por fase ──
+// Valores por defeito — o mesmo texto já publicado em rgpd.html, usado como ponto de
+// partida do formulário enquanto a coordenação não gravar a sua própria versão.
+const RGPD_DEFAULTS = {
+  title: 'Consentimento para Recolha e Tratamento de Dados Pessoais e Imagens',
+  intro: 'Ao assinar este formulário, está a consentir expressamente com a recolha e tratamento dos seus dados pessoais e imagens, para os fins especificados. Este consentimento é voluntário e pode ser retirado a qualquer momento, sem efeitos sobre o tratamento de dados realizado até à data da retirada.',
+  declaration: 'Por meio da assinatura abaixo, declaro que fui informado(a) sobre o tratamento dos meus dados pessoais e sobre a recolha das minhas imagens e que consinto livremente e de forma esclarecida com a recolha, tratamento e utilização dos meus dados pessoais e imagens para as finalidades descritas neste formulário.',
+  entityName: 'Parábola Citadina Associação',
+  address: 'Rua do Heroísmo 285, 4300-259 Porto',
+  nif: '515725013',
+  phone: '934 336 764',
+  email: 'porto@pedalarsemidade.pt',
+};
+
+// Admin do documento de consentimento (RGPD) apresentado aos candidatos — grava no
+// backend (org_settings) via a mesma rota genérica usada para o vídeo de apresentação.
+function RgpdConsentAdmin({ store }) {
+  const [form, setForm] = useStateCF({ ...RGPD_DEFAULTS, ...(store.rgpdConsent || {}) });
+  const [saving, setSaving] = useStateCF(false);
+  const [saved, setSaved] = useStateCF(false);
+  const [err, setErr] = useStateCF(null);
+  const set = (k, v) => { setForm((p) => ({ ...p, [k]: v })); setSaved(false); };
+
+  // rgpdConsent chega de um fetch assíncrono — se ainda não tinha carregado no
+  // primeiro render, actualiza o formulário assim que os dados reais chegarem.
+  useEffectCF(() => {
+    if (store.rgpdConsent) setForm({ ...RGPD_DEFAULTS, ...store.rgpdConsent });
+    // eslint-disable-next-line
+  }, [store.rgpdConsent]);
+
+  const handleSave = async () => {
+    setSaving(true); setErr(null);
+    const result = await store.saveRgpdConsent(form);
+    setSaving(false);
+    if (result && result.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+    else setErr((result && result.error) || 'Erro ao guardar');
+  };
+
+  const fieldStyle = { marginBottom: 10 };
+  const labelStyle = { font: '600 11.5px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5, display: 'block' };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ font: '700 11px var(--ui)', letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--ink-soft)', paddingBottom: 10, borderBottom: '2px solid var(--line)', marginBottom: 14 }}>
+        RGPD · Consentimento de dados
+      </div>
+      <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 10px' }}>
+        Texto mostrado aos candidatos no ecrã de consentimento e na página pública <code>/rgpd.html</code>, ligada aí por um botão "Ver documento de consentimento".
+      </p>
+
+      <div style={fieldStyle}>
+        <label style={labelStyle}>Título</label>
+        <input className="pedal-input" value={form.title} onChange={(e) => set('title', e.target.value)} />
+      </div>
+      <div style={fieldStyle}>
+        <label style={labelStyle}>Texto introdutório</label>
+        <textarea className="pedal-agentinfo" style={{ minHeight: 70 }} value={form.intro} onChange={(e) => set('intro', e.target.value)} />
+      </div>
+      <div style={fieldStyle}>
+        <label style={labelStyle}>Declaração de consentimento</label>
+        <textarea className="pedal-agentinfo" style={{ minHeight: 70 }} value={form.declaration} onChange={(e) => set('declaration', e.target.value)} />
+      </div>
+
+      <div style={{ font: '600 11.5px var(--ui)', color: 'var(--ink-soft)', margin: '14px 0 8px' }}>Responsável pelo tratamento dos dados</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={fieldStyle}><label style={labelStyle}>Nome/Designação social</label><input className="pedal-input" value={form.entityName} onChange={(e) => set('entityName', e.target.value)} /></div>
+        <div style={fieldStyle}><label style={labelStyle}>NIF/Registo comercial</label><input className="pedal-input" value={form.nif} onChange={(e) => set('nif', e.target.value)} /></div>
+        <div style={{ ...fieldStyle, gridColumn: '1 / -1' }}><label style={labelStyle}>Endereço</label><input className="pedal-input" value={form.address} onChange={(e) => set('address', e.target.value)} /></div>
+        <div style={fieldStyle}><label style={labelStyle}>Telefone</label><input className="pedal-input" value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+        <div style={fieldStyle}><label style={labelStyle}>Email</label><input className="pedal-input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} /></div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+        {saved && <span style={{ font: '600 12px var(--ui)', color: 'var(--accent-deep)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="check" size={14} color="var(--accent-deep)" />Alterações gravadas</span>}
+        {err && <span style={{ font: '600 12px var(--ui)', color: 'var(--primary-deep)' }}>{err}</span>}
+        <button className="pedal-btn primary" style={{ opacity: saving ? 0.6 : 1 }} disabled={saving} onClick={handleSave}>
+          {saving ? 'A gravar…' : 'Gravar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function IntroVideoAdmin({ store }) {
   const [url, setUrl] = useStateCF(store.introVideoUrl || '');
   const [saved, setSaved] = useStateCF(false);
@@ -259,6 +341,7 @@ function ModuleContentAdmin({ store }) {
         <span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Vídeos & conteúdos</span>
       </div>
       <IntroVideoAdmin store={store} />
+      <RgpdConsentAdmin store={store} />
       <div style={{ font: '700 11px var(--ui)', letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--ink-soft)', paddingBottom: 10, borderBottom: '2px solid var(--line)', marginBottom: 14 }}>
         Formação
       </div>

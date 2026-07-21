@@ -34,8 +34,8 @@ p{font-size:14.5px; line-height:1.65; color:var(--ink); margin:0 0 14px;}
 <div class="wrap">
   <div class="top"><img id="brandLogo" alt="" /><span>PEDALAR SEM IDADE PORTO</span></div>
   <div class="card">
-    <h1>Consentimento para Recolha e Tratamento de Dados Pessoais e Imagens</h1>
-    <p>
+    <h1 id="rgpdTitle">Consentimento para Recolha e Tratamento de Dados Pessoais e Imagens</h1>
+    <p id="rgpdIntro">
       Ao assinar este formulário, está a consentir expressamente com a recolha e tratamento dos
       seus dados pessoais e imagens, para os fins especificados. Este consentimento é voluntário e
       pode ser retirado a qualquer momento, sem efeitos sobre o tratamento de dados realizado até
@@ -43,7 +43,7 @@ p{font-size:14.5px; line-height:1.65; color:var(--ink); margin:0 0 14px;}
     </p>
 
     <h2>Declaração de Consentimento</h2>
-    <p>
+    <p id="rgpdDeclaration">
       Por meio da assinatura abaixo, declaro que fui informado(a) sobre o tratamento dos meus
       dados pessoais e sobre a recolha das minhas imagens e que consinto livremente e de forma
       esclarecida com a recolha, tratamento e utilização dos meus dados pessoais e imagens para
@@ -52,11 +52,11 @@ p{font-size:14.5px; line-height:1.65; color:var(--ink); margin:0 0 14px;}
 
     <h2>Identificação do Responsável pelo Tratamento dos Dados</h2>
     <div class="meta">
-      <div><strong>Nome/Designação Social:</strong> Parábola Citadina Associação</div>
-      <div><strong>Endereço:</strong> Rua do Heroísmo 285, 4300-259 Porto</div>
-      <div><strong>NIF/Registo Comercial:</strong> 515725013</div>
-      <div><strong>Telefone:</strong> 934 336 764</div>
-      <div><strong>E-mail:</strong> porto@pedalarsemidade.pt</div>
+      <div><strong>Nome/Designação Social:</strong> <span id="rgpdEntityName">Parábola Citadina Associação</span></div>
+      <div><strong>Endereço:</strong> <span id="rgpdAddress">Rua do Heroísmo 285, 4300-259 Porto</span></div>
+      <div><strong>NIF/Registo Comercial:</strong> <span id="rgpdNif">515725013</span></div>
+      <div><strong>Telefone:</strong> <span id="rgpdPhone">934 336 764</span></div>
+      <div><strong>E-mail:</strong> <span id="rgpdEmail">porto@pedalarsemidade.pt</span></div>
     </div>
   </div>
   <a class="back" href="javascript:history.back()">← Voltar</a>
@@ -65,6 +65,21 @@ p{font-size:14.5px; line-height:1.65; color:var(--ink); margin:0 0 14px;}
 <script>
   var img = document.getElementById('brandLogo');
   if (window.__PEDAL_LOGO) { img.src = window.__PEDAL_LOGO; } else { img.style.display = 'none'; }
+
+  // A coordenação pode editar este texto em Gestão → Vídeos & conteúdos; se já houver
+  // uma versão gravada, substitui o texto por defeito acima por ela.
+  fetch('/api/settings/rgpd_consent').then(function (r) { return r.json(); }).then(function (data) {
+    if (!data || typeof data !== 'object') return;
+    var map = {
+      rgpdTitle: 'title', rgpdIntro: 'intro', rgpdDeclaration: 'declaration',
+      rgpdEntityName: 'entityName', rgpdAddress: 'address', rgpdNif: 'nif',
+      rgpdPhone: 'phone', rgpdEmail: 'email',
+    };
+    Object.keys(map).forEach(function (elId) {
+      var value = data[map[elId]];
+      if (value) document.getElementById(elId).textContent = value;
+    });
+  }).catch(function () {});
 </script>
 </body>
 </html>
