@@ -12,7 +12,10 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 // mais tarde para outros documentos (ex.: base de conhecimento do agente).
 router.post('/', requireAuth, requireCoordinator, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Ficheiro em falta' });
-  const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+  // multer/busboy devolvem nomes com acentos mal decodificados (lidos como latin1
+  // em vez de utf8) — reconverte antes de mostrar o nome ao utilizador.
+  const displayName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+  const safeName = displayName.replace(/[^a-zA-Z0-9._-]/g, '_');
   const folder = (req.body.key || 'misc').replace(/[^a-zA-Z0-9_-]/g, '_');
   const path = `${folder}/${Date.now()}-${safeName}`;
 
@@ -23,7 +26,7 @@ router.post('/', requireAuth, requireCoordinator, upload.single('file'), async (
   if (error) return res.status(500).json({ error: error.message });
 
   const { data } = supabase.storage.from('documents').getPublicUrl(path);
-  res.status(201).json({ url: data.publicUrl, name: req.file.originalname });
+  res.status(201).json({ url: data.publicUrl, name: displayName });
 });
 
 module.exports = router;

@@ -248,7 +248,7 @@ function DocumentUploadRow({ store, doc }) {
             </label>
             <button className="pedal-authlink" style={{ color: 'var(--accent-deep)' }} onClick={remove}>Remover</button>
           </div>
-          <a href={viewUrl} target="_blank" rel="noreferrer" className="pedal-authlink" style={{ display: 'inline-block', marginTop: 8 }}>Ver como o candidato vê ↗</a>
+          <a href={viewUrl} className="pedal-authlink" style={{ display: 'inline-block', marginTop: 8 }}>Ver como o candidato vê</a>
         </>
       ) : (
         <label
