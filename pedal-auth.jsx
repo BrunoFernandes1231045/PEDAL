@@ -89,6 +89,9 @@ function AuthGate({ store }) {
             </Field>
             {err && <div className="pedal-autherr"><Icon name="shield" size={14} />{err}</div>}
             <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} disabled={loading || !email.trim() || !pw.trim()} onClick={tryLogin}>{loading ? 'A entrar…' : 'Entrar'}</button>
+            <div style={{ textAlign: 'center', marginTop: 10 }}>
+              <a href="/recuperar-palavra-passe" className="pedal-authlink">Esqueceu-se da palavra-passe?</a>
+            </div>
             <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '14px 0 0', textAlign: 'center' }}>
               As credenciais chegam por email assim que terminares a inscrição.
             </p>
@@ -241,6 +244,11 @@ function LoginPanel({ store }) {
       <TabHeader title="Entrar" subtitle="Acede à tua conta de voluntário" />
       <div className="pedal-tabbody">
         <div className="pedal-authcard" style={{ margin: 0 }}>
+          {store.passwordJustChanged && (
+            <div className="pedal-autherr" role="status" style={{ color: 'var(--primary-deep)', background: 'var(--primary-soft)' }}>
+              <Icon name="check" size={14} />Palavra-passe alterada com sucesso. Já pode iniciar sessão.
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16 }}>
             <Avatar size={54} />
             <div style={{ font: '800 18px var(--display)', color: 'var(--ink)', marginTop: 12 }}>Bem-vindo(a) de volta</div>
@@ -252,6 +260,9 @@ function LoginPanel({ store }) {
           <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} onClick={tryLogin} disabled={loading || !email.trim() || !pw.trim()}>
             {loading ? 'A entrar…' : 'Entrar'}
           </button>
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <a href="/recuperar-palavra-passe" className="pedal-authlink">Esqueceu-se da palavra-passe?</a>
+          </div>
           {hasAccount ? (
             <div style={{ marginTop: 12 }}>
               <button className="pedal-authlink" onClick={() => setHint((h) => !h)}>{hint ? 'Ocultar credenciais' : 'Esqueci-me dos dados de acesso'}</button>
@@ -456,7 +467,12 @@ function CoordLoginScreen({ store }) {
           <div style={{ font: '800 18px var(--display)', color: 'var(--ink)', marginTop: 4 }}>Coordenação</div>
           <div style={{ font: '500 13px var(--ui)', color: 'var(--ink-soft)' }}>Pedalar Sem Idade Porto</div>
         </div>
-        {err && <div className="pedal-autherr" style={{ marginBottom: 14 }}><Icon name="alert" size={14} />{err}</div>}
+        {store.passwordJustChanged && (
+          <div className="pedal-autherr" role="status" style={{ marginBottom: 14, color: 'var(--primary-deep)', background: 'var(--primary-soft)' }}>
+            <Icon name="check" size={14} />Palavra-passe alterada com sucesso. Já pode iniciar sessão.
+          </div>
+        )}
+        {err && <div className="pedal-autherr" role="alert" style={{ marginBottom: 14 }}><Icon name="shield" size={14} />{err}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Email</div>
@@ -469,6 +485,9 @@ function CoordLoginScreen({ store }) {
           <button className="pedal-btn primary" style={{ width: '100%', marginTop: 4 }} onClick={handleLogin} disabled={loading || !email || !pw}>
             {loading ? 'A entrar…' : 'Entrar'}
           </button>
+          <div style={{ textAlign: 'center', marginTop: 2 }}>
+            <a href="/recuperar-palavra-passe" className="pedal-authlink">Esqueceu-se da palavra-passe?</a>
+          </div>
         </div>
       </div>
     </div>

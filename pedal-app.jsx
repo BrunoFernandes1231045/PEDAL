@@ -66,6 +66,13 @@ function App() {
   const [realContactRequests, setRealContactRequests] = useStateA(null);
   const [candidateJwt, setCandidateJwtRaw] = useStateA(null);
   const [chatLoaded, setChatLoaded] = useStateA(false);
+  // Mensagem de sucesso ao regressar de /nova-palavra-passe (ver pedal-password-recovery.jsx).
+  const [passwordJustChanged] = useStateA(() => new URLSearchParams(window.location.search).get('palavra-passe-alterada') === '1');
+  useEffectA(() => {
+    if (!passwordJustChanged) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    if (window.__PEDAL_MODE !== 'coord') setS((p) => ({ ...p, tab: 'perfil' }));
+  }, []);
   const msgSyncTimer = useRefA();
   const nodeSyncTimer = useRefA();
   const chatLoadedFor = useRefA(null);
@@ -642,7 +649,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

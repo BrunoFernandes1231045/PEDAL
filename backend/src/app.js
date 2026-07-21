@@ -13,6 +13,7 @@ const dashboardRouter = require('./routes/dashboard');
 const coordUsersRouter = require('./routes/coordUsers');
 const localitiesRouter = require('./routes/localities');
 const settingsRouter = require('./routes/settings');
+const authConfigRouter = require('./routes/authConfig');
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,11 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', '..')));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+// URLs "limpas" (sem .html) para as páginas de recuperação de palavra-passe,
+// para corresponderem exatamente ao redirectTo configurado no Supabase.
+app.get('/recuperar-palavra-passe', (req, res) => res.sendFile(path.join(__dirname, '..', '..', 'recuperar-palavra-passe.html')));
+app.get('/nova-palavra-passe', (req, res) => res.sendFile(path.join(__dirname, '..', '..', 'nova-palavra-passe.html')));
+app.use('/api/auth-config', authConfigRouter);
 app.use('/api/candidates', candidatesRouter);
 app.use('/api/candidates/:id/messages', messagesRouter);
 app.use('/api/candidates/:id/onboarding', onboardingRouter);
