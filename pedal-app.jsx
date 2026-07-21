@@ -61,6 +61,7 @@ function App() {
   const [realNeeds, setRealNeeds] = useStateA(null);
   const [introVideoUrl, setIntroVideoUrl] = useStateA(null);
   const [rgpdConsent, setRgpdConsent] = useStateA(null);
+  const [rgpdDocumentUrl, setRgpdDocumentUrl] = useStateA(null);
   const [realStations, setRealStations] = useStateA(null);
   const [realLocalities, setRealLocalities] = useStateA(null);
   const [realNotifs, setRealNotifs] = useStateA(null);
@@ -425,6 +426,13 @@ function App() {
       .catch(() => {});
   }, []);
 
+  useEffectA(() => {
+    fetch('/api/settings/rgpd_document_url')
+      .then((r) => r.json())
+      .then((data) => { if (data && data.url) setRgpdDocumentUrl(data.url); })
+      .catch(() => {});
+  }, []);
+
   // Refetch needs quando o candidato chega ao formulário de triagem — garante dados frescos
   useEffectA(() => {
     if (S.chat && S.chat.node === 'triage') {
@@ -581,6 +589,39 @@ function App() {
       return { ok: false, error: (d && d.error) || 'Erro ao guardar' };
     })).catch(() => ({ ok: false, error: 'Erro de rede' }));
   };
+  const saveRgpdDocumentUrl = (url) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
+    return fetch('/api/settings/rgpd_document_url', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify({ url }),
+    }).then((r) => r.json().then((data) => {
+      if (r.ok) { setRgpdDocumentUrl(data.url || null); return { ok: true }; }
+      return { ok: false, error: (data && data.error) || 'Erro ao guardar' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
+  // Envia o PDF para o Supabase Storage (bucket "documents") e grava o URL público
+  // resultante em org_settings. "key" agrupa o ficheiro numa subpasta (ex.: "rgpd") —
+  // pensado para ser reutilizado mais tarde por outros documentos (ex.: base de
+  // conhecimento do agente).
+  const uploadDocument = (file, key) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
+    const form = new FormData();
+    form.append('file', file);
+    form.append('key', key);
+    return fetch('/api/documents', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${coordJwt}` },
+      body: form,
+    }).then((r) => r.json().then((data) => {
+      if (r.ok && data && data.url) return { ok: true, url: data.url };
+      return { ok: false, error: (data && data.error) || 'Erro ao enviar o ficheiro' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
+  const uploadRgpdPdf = (file) => uploadDocument(file, 'rgpd').then((res) => {
+    if (!res.ok) return res;
+    return saveRgpdDocumentUrl(res.url);
+  });
 
   const saveNeedsSchedule = (schedule) => {
     if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
@@ -668,7 +709,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveRgpdConsent, rgpdConsent, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveRgpdConsent, rgpdConsent, saveRgpdDocumentUrl, rgpdDocumentUrl, uploadRgpdPdf, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

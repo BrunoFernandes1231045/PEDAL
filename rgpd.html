@@ -28,12 +28,20 @@ p{font-size:14.5px; line-height:1.65; color:var(--ink); margin:0 0 14px;}
 .meta strong{color:var(--ink-soft); font-weight:600;}
 .back{display:inline-block; margin-top:26px; font-weight:700; font-size:13px; color:var(--primary-deep); text-decoration:none;}
 .back:hover{text-decoration:underline;}
+.pdflink{display:inline-block; margin-bottom:14px; font-weight:700; font-size:13px; color:var(--primary-deep);}
+.pdfframe{width:100%; height:75vh; border:1px solid var(--line); border-radius:12px;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top"><img id="brandLogo" alt="" /><span>PEDALAR SEM IDADE PORTO</span></div>
-  <div class="card">
+
+  <div id="pdfCard" class="card" style="display:none">
+    <a id="pdfOpenLink" class="pdflink" target="_blank" rel="noreferrer">Abrir/descarregar PDF ↗</a>
+    <iframe id="pdfFrame" class="pdfframe" title="Documento de consentimento (RGPD)"></iframe>
+  </div>
+
+  <div id="textCard" class="card">
     <h1 id="rgpdTitle">Consentimento para Recolha e Tratamento de Dados Pessoais e Imagens</h1>
     <p id="rgpdIntro">
       Ao assinar este formulário, está a consentir expressamente com a recolha e tratamento dos
@@ -66,18 +74,28 @@ p{font-size:14.5px; line-height:1.65; color:var(--ink); margin:0 0 14px;}
   var img = document.getElementById('brandLogo');
   if (window.__PEDAL_LOGO) { img.src = window.__PEDAL_LOGO; } else { img.style.display = 'none'; }
 
-  // A coordenação pode editar este texto em Gestão → Vídeos & conteúdos; se já houver
-  // uma versão gravada, substitui o texto por defeito acima por ela.
-  fetch('/api/settings/rgpd_consent').then(function (r) { return r.json(); }).then(function (data) {
-    if (!data || typeof data !== 'object') return;
-    var map = {
-      rgpdTitle: 'title', rgpdIntro: 'intro', rgpdDeclaration: 'declaration',
-      rgpdEntityName: 'entityName', rgpdAddress: 'address', rgpdNif: 'nif',
-      rgpdPhone: 'phone', rgpdEmail: 'email',
-    };
-    Object.keys(map).forEach(function (elId) {
-      var value = data[map[elId]];
-      if (value) document.getElementById(elId).textContent = value;
+  // Se a coordenação tiver carregado um PDF (Gestão → Vídeos & conteúdos), é ele que
+  // conta — mostra-o diretamente e nem sequer vai buscar o texto escrito à mão.
+  fetch('/api/settings/rgpd_document_url').then(function (r) { return r.json(); }).then(function (data) {
+    if (data && data.url) {
+      document.getElementById('textCard').style.display = 'none';
+      document.getElementById('pdfCard').style.display = '';
+      document.getElementById('pdfOpenLink').href = data.url;
+      document.getElementById('pdfFrame').src = data.url;
+      return;
+    }
+    // Sem PDF: usa o texto gravado (se existir), com o texto por defeito acima como base.
+    return fetch('/api/settings/rgpd_consent').then(function (r) { return r.json(); }).then(function (consent) {
+      if (!consent || typeof consent !== 'object') return;
+      var map = {
+        rgpdTitle: 'title', rgpdIntro: 'intro', rgpdDeclaration: 'declaration',
+        rgpdEntityName: 'entityName', rgpdAddress: 'address', rgpdNif: 'nif',
+        rgpdPhone: 'phone', rgpdEmail: 'email',
+      };
+      Object.keys(map).forEach(function (elId) {
+        var value = consent[map[elId]];
+        if (value) document.getElementById(elId).textContent = value;
+      });
     });
   }).catch(function () {});
 </script>

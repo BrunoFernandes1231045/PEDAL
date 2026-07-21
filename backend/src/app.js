@@ -14,6 +14,7 @@ const coordUsersRouter = require('./routes/coordUsers');
 const localitiesRouter = require('./routes/localities');
 const settingsRouter = require('./routes/settings');
 const authConfigRouter = require('./routes/authConfig');
+const documentsRouter = require('./routes/documents');
 
 const app = express();
 app.use(cors());
@@ -26,6 +27,7 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/recuperar-palavra-passe', (req, res) => res.sendFile(path.join(__dirname, '..', '..', 'recuperar-palavra-passe.html')));
 app.get('/nova-palavra-passe', (req, res) => res.sendFile(path.join(__dirname, '..', '..', 'nova-palavra-passe.html')));
 app.use('/api/auth-config', authConfigRouter);
+app.use('/api/documents', documentsRouter);
 app.use('/api/candidates', candidatesRouter);
 app.use('/api/candidates/:id/messages', messagesRouter);
 app.use('/api/candidates/:id/onboarding', onboardingRouter);
