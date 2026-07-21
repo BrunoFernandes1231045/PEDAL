@@ -224,20 +224,28 @@ function RgpdPdfUpload({ store }) {
     if (!result || !result.ok) setErr((result && result.error) || 'Erro ao enviar o ficheiro');
   };
 
-  const remove = () => { if (window.confirm('Remover o PDF carregado? A página volta a mostrar o texto escrito abaixo.')) store.saveRgpdDocumentUrl(null); };
+  const remove = () => { if (window.confirm('Remover o PDF carregado? A página volta a mostrar o texto escrito abaixo.')) store.saveRgpdDocumentUrl(null, null); };
 
   return (
     <div style={{ marginBottom: 16 }}>
       {url ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--app-bg)', border: '1px solid var(--line)', borderRadius: 12, padding: '11px 13px' }}>
-          <Icon name="doc" size={16} color="var(--primary)" />
-          <a href={url} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, font: '700 13px var(--ui)', color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>PDF carregado — ver documento</a>
-          <label className="pedal-authlink" style={{ cursor: 'pointer' }}>
-            {uploading ? 'A enviar…' : 'Substituir'}
-            <input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploading} onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ''; }} />
-          </label>
-          <button className="pedal-authlink" style={{ color: 'var(--accent-deep)' }} onClick={remove}>Remover</button>
-        </div>
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--app-bg)', border: '1px solid var(--line)', borderRadius: 12, padding: '11px 13px' }}>
+            <Icon name="check" size={16} color="var(--accent-deep)" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {store.rgpdDocumentName || 'Documento carregado'}
+              </div>
+              <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>É este ficheiro que os candidatos veem agora.</div>
+            </div>
+            <label className="pedal-authlink" style={{ cursor: 'pointer' }}>
+              {uploading ? 'A enviar…' : 'Substituir'}
+              <input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploading} onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ''; }} />
+            </label>
+            <button className="pedal-authlink" style={{ color: 'var(--accent-deep)' }} onClick={remove}>Remover</button>
+          </div>
+          <a href="/rgpd.html" target="_blank" rel="noreferrer" className="pedal-authlink" style={{ display: 'inline-block', marginTop: 8 }}>Ver a página exatamente como o candidato a vê ↗</a>
+        </>
       ) : (
         <label
           className="pedal-uploadbtn"
