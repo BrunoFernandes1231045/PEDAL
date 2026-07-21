@@ -216,7 +216,7 @@ function DocumentUploadRow({ store, doc }) {
   const [err, setErr] = useStateCF(null);
   const [dragOver, setDragOver] = useStateCF(false);
   const current = (store.documentUrls || {})[doc.settingsKey];
-  const viewUrl = doc.previewUrl || (current && current.url);
+  const viewUrl = doc.previewUrl || `/documento.html?key=${encodeURIComponent(doc.settingsKey)}&label=${encodeURIComponent(doc.label)}`;
 
   const handleFile = async (file) => {
     if (!file) return;

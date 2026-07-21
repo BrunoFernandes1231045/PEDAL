@@ -103,7 +103,7 @@ function FormalizationCard({ store, onConfirm }) {
       {termDocs.some((d) => docUrls[d.settingsKey]) && (
         <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {termDocs.filter((d) => docUrls[d.settingsKey]).map((d) => (
-            <a key={d.settingsKey} href={docUrls[d.settingsKey].url} target="_blank" rel="noreferrer"
+            <a key={d.settingsKey} href={`/documento.html?key=${encodeURIComponent(d.settingsKey)}&label=${encodeURIComponent(d.label)}`}
               className="pedal-chip-btn" style={{ border: '1.5px solid var(--line)', background: 'var(--surface)', color: 'var(--ink)', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <Icon name="doc" size={13} color="var(--primary)" />{d.label}
             </a>

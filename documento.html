@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PEDAL · Documento</title>
+<style>
+:root{
+  --bg:#E9EFED; --app-bg:#F6F8F7; --surface:#FFFFFF;
+  --ink:#161616; --ink-soft:#6C736F; --line:#E4E9E7;
+  --primary:#ED1C24; --primary-deep:#C4151C;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; min-height:100vh; background:var(--bg);
+  font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:var(--ink);
+  padding:40px 18px 60px;
+}
+.wrap{max-width:640px; margin:0 auto;}
+.top{display:flex; align-items:center; gap:10px; margin-bottom:24px;}
+.top img{height:32px;}
+.top span{font-weight:800; font-size:15px; letter-spacing:.02em;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:32px; box-shadow:0 4px 18px rgba(0,0,0,.04);}
+h1{font-size:20px; margin:0 0 6px;}
+p{font-size:14.5px; line-height:1.65; color:var(--ink-soft); margin:0;}
+.back{display:inline-block; margin-top:26px; font-weight:700; font-size:13px; color:var(--primary-deep); text-decoration:none;}
+.back:hover{text-decoration:underline;}
+.pdflink{display:inline-block; margin-bottom:14px; font-weight:700; font-size:13px; color:var(--primary-deep);}
+.pdfframe{width:100%; height:75vh; border:1px solid var(--line); border-radius:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><img id="brandLogo" alt="" /><span>PEDALAR SEM IDADE PORTO</span></div>
+
+  <div id="pdfCard" class="card" style="display:none">
+    <a id="pdfOpenLink" class="pdflink" target="_blank" rel="noreferrer">Abrir/descarregar PDF ↗</a>
+    <iframe id="pdfFrame" class="pdfframe" title="Documento"></iframe>
+  </div>
+
+  <div id="emptyCard" class="card" style="display:none">
+    <h1 id="emptyTitle">Documento</h1>
+    <p>Este documento ainda não foi carregado pela coordenação.</p>
+  </div>
+
+  <a class="back" href="javascript:history.back()">← Voltar</a>
+</div>
+<script src="pedal-logo.js"></script>
+<script>
+  var img = document.getElementById('brandLogo');
+  if (window.__PEDAL_LOGO) { img.src = window.__PEDAL_LOGO; } else { img.style.display = 'none'; }
+
+  var params = new URLSearchParams(window.location.search);
+  var key = params.get('key');
+  var label = params.get('label') || 'Documento';
+  document.title = 'PEDAL · ' + label;
+  document.getElementById('emptyTitle').textContent = label;
+
+  if (!key) {
+    document.getElementById('emptyCard').style.display = '';
+  } else {
+    fetch('/api/settings/' + encodeURIComponent(key)).then(function (r) { return r.json(); }).then(function (data) {
+      if (data && data.url) {
+        document.getElementById('pdfCard').style.display = '';
+        document.getElementById('pdfOpenLink').href = data.url;
+        document.getElementById('pdfOpenLink').textContent = 'Abrir/descarregar "' + label + '" ↗';
+        document.getElementById('pdfFrame').title = label;
+        document.getElementById('pdfFrame').src = data.url;
+      } else {
+        document.getElementById('emptyCard').style.display = '';
+      }
+    }).catch(function () {
+      document.getElementById('emptyCard').style.display = '';
+    });
+  }
+</script>
+</body>
+</html>
