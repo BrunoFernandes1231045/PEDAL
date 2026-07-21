@@ -713,7 +713,7 @@ function ChatView({ store, tone = 'caloroso' }) {
         say(lines, () => setInteraction(interactionFor('practical_booked')));
       }} />;
     }
-    if (it.type === 'card:formalize') return <FormalizationCard onConfirm={(sig) => {
+    if (it.type === 'card:formalize') return <FormalizationCard store={store} onConfirm={(sig) => {
       store.up({ signature: sig, termsAccepted: true });
       const fJwt = store.candidateJwt || store.coordJwt;
       if (S.candidateId && fJwt) {

@@ -9,6 +9,18 @@ const PEDAL = {};
 // porque esse exige permissões da conta que os candidatos não têm).
 PEDAL.PRIVACY_POLICY_URL = '/rgpd.html';
 
+// Documentos que a coordenação pode carregar (Gestão → Vídeos & conteúdos) e que os
+// candidatos podem consultar antes de aceitar. settingsKey = chave em org_settings
+// onde fica gravado { url, name }; uploadKey = subpasta no Supabase Storage.
+// previewUrl: página própria a mostrar em vez do PDF em bruto (ex.: rgpd.html tem
+// texto de reserva quando ainda não há PDF carregado); sem isso, "ver" abre o PDF.
+PEDAL.CONSENT_DOCUMENTS = [
+  { settingsKey: 'rgpd_document_url', uploadKey: 'rgpd', label: 'RGPD · Consentimento de dados', previewUrl: '/rgpd.html' },
+  { settingsKey: 'termo_prevencao_url', uploadKey: 'termo_prevencao', label: 'Prevenção de Acidentes' },
+  { settingsKey: 'termo_comunicacao_url', uploadKey: 'termo_comunicacao', label: 'Política de comunicação' },
+  { settingsKey: 'termo_acordo_url', uploadKey: 'termo_acordo', label: 'Acordo de voluntariado' },
+];
+
 // ── Localidades e necessidades da organização (RF-08) ────────────────
 // Municípios com coach/necessidade ativa = match; restantes = lista de espera.
 PEDAL.LOCALITIES = [

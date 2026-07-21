@@ -208,33 +208,37 @@ function PracticalCompleteModal({ c, store, onClose, startEditing }) {
   );
 }
 
-// ── Gestão de conteúdos de formação: vídeos e info do agente por fase ──
-function RgpdPdfUpload({ store }) {
+// ── Gestão de documentos/termos que os candidatos podem consultar ──
+// Uma linha de upload genérica por documento (RGPD, Prevenção de Acidentes,
+// Política de comunicação, Acordo de voluntariado — ver PEDAL.CONSENT_DOCUMENTS).
+function DocumentUploadRow({ store, doc }) {
   const [uploading, setUploading] = useStateCF(false);
   const [err, setErr] = useStateCF(null);
   const [dragOver, setDragOver] = useStateCF(false);
-  const url = store.rgpdDocumentUrl;
+  const current = (store.documentUrls || {})[doc.settingsKey];
+  const viewUrl = doc.previewUrl || (current && current.url);
 
   const handleFile = async (file) => {
     if (!file) return;
     if (file.type !== 'application/pdf') { setErr('Só é possível carregar ficheiros PDF.'); return; }
     setErr(null); setUploading(true);
-    const result = await store.uploadRgpdPdf(file);
+    const result = await store.uploadAndSaveDocument(file, doc);
     setUploading(false);
     if (!result || !result.ok) setErr((result && result.error) || 'Erro ao enviar o ficheiro');
   };
 
-  const remove = () => { if (window.confirm('Remover o PDF carregado? A página volta a mostrar o texto escrito abaixo.')) store.saveRgpdDocumentUrl(null, null); };
+  const remove = () => { if (window.confirm(`Remover "${doc.label}"?`)) store.saveDocumentUrl(doc.settingsKey, null, null); };
 
   return (
-    <div style={{ marginBottom: 16 }}>
-      {url ? (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ font: '700 12.5px var(--ui)', color: 'var(--ink)', marginBottom: 6 }}>{doc.label}</div>
+      {current ? (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--app-bg)', border: '1px solid var(--line)', borderRadius: 12, padding: '11px 13px' }}>
             <Icon name="check" size={16} color="var(--accent-deep)" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ font: '700 13px var(--ui)', color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {store.rgpdDocumentName || 'Documento carregado'}
+                {current.name || 'Documento carregado'}
               </div>
               <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)' }}>É este ficheiro que os candidatos veem agora.</div>
             </div>
@@ -244,7 +248,7 @@ function RgpdPdfUpload({ store }) {
             </label>
             <button className="pedal-authlink" style={{ color: 'var(--accent-deep)' }} onClick={remove}>Remover</button>
           </div>
-          <a href="/rgpd.html" target="_blank" rel="noreferrer" className="pedal-authlink" style={{ display: 'inline-block', marginTop: 8 }}>Ver a página exatamente como o candidato a vê ↗</a>
+          <a href={viewUrl} target="_blank" rel="noreferrer" className="pedal-authlink" style={{ display: 'inline-block', marginTop: 8 }}>Ver como o candidato vê ↗</a>
         </>
       ) : (
         <label
@@ -255,7 +259,7 @@ function RgpdPdfUpload({ store }) {
           onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
         >
           <input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploading} onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ''; }} />
-          <Icon name="doc" size={15} />{uploading ? 'A enviar…' : 'Arrasta o PDF do RGPD para aqui, ou clica para escolher'}
+          <Icon name="doc" size={15} />{uploading ? 'A enviar…' : 'Arrasta o PDF para aqui, ou clica para escolher'}
         </label>
       )}
       {err && <div style={{ font: '600 12px var(--ui)', color: 'var(--primary-deep)', marginTop: 6 }}>{err}</div>}
@@ -263,19 +267,19 @@ function RgpdPdfUpload({ store }) {
   );
 }
 
-// Admin do documento de consentimento (RGPD) apresentado aos candidatos — só o PDF,
-// sem edição de texto. Grava o URL do ficheiro no backend (org_settings) via a mesma
-// rota genérica usada para o vídeo de apresentação.
+// Admin dos documentos/termos apresentados aos candidatos — RGPD (ecrã de consentimento)
+// e os 3 termos do compromisso de piloto (ecrã de formalização final).
 function RgpdConsentAdmin({ store }) {
+  const docs = window.PEDAL.CONSENT_DOCUMENTS || [];
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{ font: '700 11px var(--ui)', letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--ink-soft)', paddingBottom: 10, borderBottom: '2px solid var(--line)', marginBottom: 14 }}>
-        RGPD · Consentimento de dados
+        Documentos & termos
       </div>
-      <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 10px' }}>
-        PDF mostrado na página pública <code>/rgpd.html</code>, ligada aí pelo botão "Ver documento de consentimento" no ecrã de consentimento do candidato.
+      <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 14px' }}>
+        RGPD mostrado no ecrã de consentimento inicial; os 3 termos abaixo ficam disponíveis para consulta no ecrã final de formalização, antes de o candidato aceitar o compromisso.
       </p>
-      <RgpdPdfUpload store={store} />
+      {docs.map((doc) => <DocumentUploadRow key={doc.settingsKey} store={store} doc={doc} />)}
     </div>
   );
 }

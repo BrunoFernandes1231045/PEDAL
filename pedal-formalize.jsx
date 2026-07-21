@@ -75,11 +75,15 @@ function SignaturePad({ onChange }) {
 }
 
 // ── Cartão de formalização: termos + rubrica → ativação ─────────────
-function FormalizationCard({ onConfirm }) {
+function FormalizationCard({ store, onConfirm }) {
   const F = window.PEDAL.FORMALIZATION;
   const [ok, setOk] = useStateF(false);
   const [sig, setSig] = useStateF(null);
   const ready = ok && !!sig;
+  // Termos de compromisso (Prevenção de Acidentes, Política de comunicação, Acordo
+  // de voluntariado) carregados pela coordenação — ver PEDAL.CONSENT_DOCUMENTS.
+  const termDocs = (window.PEDAL.CONSENT_DOCUMENTS || []).filter((d) => d.settingsKey !== 'rgpd_document_url');
+  const docUrls = (store && store.documentUrls) || {};
   // Nota: a animação de entrada (cardIn) congela neste cartão quando é montado
   // ao recarregar já em "formalização" (fica preso em opacity:0). Como uma
   // animação "a correr" tem prioridade sobre o estilo inline, desativamo-la aqui
@@ -96,6 +100,16 @@ function FormalizationCard({ onConfirm }) {
         ))}
       </div>
       <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '10px 0 0' }}>{F.closing}</p>
+      {termDocs.some((d) => docUrls[d.settingsKey]) && (
+        <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {termDocs.filter((d) => docUrls[d.settingsKey]).map((d) => (
+            <a key={d.settingsKey} href={docUrls[d.settingsKey].url} target="_blank" rel="noreferrer"
+              className="pedal-chip-btn" style={{ border: '1.5px solid var(--line)', background: 'var(--surface)', color: 'var(--ink)', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="doc" size={13} color="var(--primary)" />{d.label}
+            </a>
+          ))}
+        </div>
+      )}
       <label className="pedal-checkrow" style={{ marginTop: 12 }}>
         <input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} />
         <span>Li e aceito os termos de compromisso do piloto voluntário.</span>
