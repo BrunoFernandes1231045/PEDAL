@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PEDAL · Consentimento de Dados e Imagem (RGPD)</title>
+<style>
+:root{
+  --bg:#E9EFED; --app-bg:#F6F8F7; --surface:#FFFFFF;
+  --ink:#161616; --ink-soft:#6C736F; --line:#E4E9E7;
+  --primary:#ED1C24; --primary-deep:#C4151C;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; min-height:100vh; background:var(--bg);
+  font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:var(--ink);
+  padding:40px 18px 60px;
+}
+.wrap{max-width:640px; margin:0 auto;}
+.top{display:flex; align-items:center; gap:10px; margin-bottom:24px;}
+.top img{height:32px;}
+.top span{font-weight:800; font-size:15px; letter-spacing:.02em;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:32px; box-shadow:0 4px 18px rgba(0,0,0,.04);}
+h1{font-size:20px; margin:0 0 6px;}
+h2{font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--primary-deep); margin:26px 0 8px;}
+p{font-size:14.5px; line-height:1.65; color:var(--ink); margin:0 0 14px;}
+.meta{font-size:14.5px; line-height:1.8; color:var(--ink);}
+.meta strong{color:var(--ink-soft); font-weight:600;}
+.back{display:inline-block; margin-top:26px; font-weight:700; font-size:13px; color:var(--primary-deep); text-decoration:none;}
+.back:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><img id="brandLogo" alt="" /><span>PEDALAR SEM IDADE PORTO</span></div>
+  <div class="card">
+    <h1>Consentimento para Recolha e Tratamento de Dados Pessoais e Imagens</h1>
+    <p>
+      Ao assinar este formulário, está a consentir expressamente com a recolha e tratamento dos
+      seus dados pessoais e imagens, para os fins especificados. Este consentimento é voluntário e
+      pode ser retirado a qualquer momento, sem efeitos sobre o tratamento de dados realizado até
+      à data da retirada.
+    </p>
+
+    <h2>Declaração de Consentimento</h2>
+    <p>
+      Por meio da assinatura abaixo, declaro que fui informado(a) sobre o tratamento dos meus
+      dados pessoais e sobre a recolha das minhas imagens e que consinto livremente e de forma
+      esclarecida com a recolha, tratamento e utilização dos meus dados pessoais e imagens para
+      as finalidades descritas neste formulário.
+    </p>
+
+    <h2>Identificação do Responsável pelo Tratamento dos Dados</h2>
+    <div class="meta">
+      <div><strong>Nome/Designação Social:</strong> Parábola Citadina Associação</div>
+      <div><strong>Endereço:</strong> Rua do Heroísmo 285, 4300-259 Porto</div>
+      <div><strong>NIF/Registo Comercial:</strong> 515725013</div>
+      <div><strong>Telefone:</strong> 934 336 764</div>
+      <div><strong>E-mail:</strong> porto@pedalarsemidade.pt</div>
+    </div>
+  </div>
+  <a class="back" href="javascript:history.back()">← Voltar</a>
+</div>
+<script src="pedal-logo.js"></script>
+<script>
+  var img = document.getElementById('brandLogo');
+  if (window.__PEDAL_LOGO) { img.src = window.__PEDAL_LOGO; } else { img.style.display = 'none'; }
+</script>
+</body>
+</html>

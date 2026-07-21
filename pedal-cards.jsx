@@ -75,6 +75,10 @@ function ConsentCard({ onAccept, onMore }) {
         email, localidade e disponibilidade). Usamo-los só para o processo de voluntariado e nunca
         os partilhamos sem o teu consentimento, ao abrigo do RGPD.
       </p>
+      <a href={window.PEDAL.PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer"
+        style={{ display: 'inline-block', marginTop: 10, font: '700 12.5px var(--ui)', color: 'var(--primary-deep)' }}>
+        Ver documento de consentimento (RGPD) ↗
+      </a>
       <label className="pedal-checkrow" style={{ marginTop: 12 }}>
         <input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} />
         <span>Li e aceito o tratamento dos meus dados.</span>

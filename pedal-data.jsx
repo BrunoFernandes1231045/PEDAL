@@ -4,6 +4,11 @@
 
 const PEDAL = {};
 
+// Documento de consentimento de dados/imagem (RGPD) da Pedalar Sem Idade — autoalojado
+// em rgpd.html a partir do PDF fornecido pela organização (não é um link do Google Docs
+// porque esse exige permissões da conta que os candidatos não têm).
+PEDAL.PRIVACY_POLICY_URL = '/rgpd.html';
+
 // ── Localidades e necessidades da organização (RF-08) ────────────────
 // Municípios com coach/necessidade ativa = match; restantes = lista de espera.
 PEDAL.LOCALITIES = [
