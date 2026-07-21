@@ -305,9 +305,9 @@ function CoordProfileMenu({ store, onClose, onOpenModal }) {
             <div style={{ font: '500 11.5px var(--ui)', color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cp.role}</div>
           </div>
         </div>
-        <div className="pedal-proflist" style={{ marginBottom: 10 }}>
-          <div className="pedal-profrow"><span style={{ font: '500 12.5px var(--ui)', color: 'var(--ink-soft)' }}>Email</span><span style={{ font: '700 13px var(--ui)', color: 'var(--ink)', textAlign: 'right', wordBreak: 'break-word' }}>{cp.email || '—'}</span></div>
-          <div className="pedal-profrow" style={{ borderBottom: 'none' }}><span style={{ font: '500 12.5px var(--ui)', color: 'var(--ink-soft)' }}>Telefone</span><span style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{cp.phone || '—'}</span></div>
+        <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
+          <div style={{ font: '500 12.5px var(--ui)', color: 'var(--ink-soft)', wordBreak: 'break-word' }}>Email: <strong style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{cp.email || '—'}</strong></div>
+          <div style={{ font: '500 12.5px var(--ui)', color: 'var(--ink-soft)' }}>Telefone: <strong style={{ font: '700 13px var(--ui)', color: 'var(--ink)' }}>{cp.phone || '—'}</strong></div>
         </div>
         <div style={{ display: 'grid', gap: 4 }}>
           <button onClick={() => onOpenModal('edit')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, font: '700 13px var(--ui)', color: 'var(--ink)', width: '100%', textAlign: 'left' }}><Icon name="user" size={15} color="var(--primary)" />Editar telefone / email</button>
