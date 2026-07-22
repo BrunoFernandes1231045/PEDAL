@@ -128,16 +128,12 @@ PEDAL.FAQ = [
 PEDAL.FAQ_CHIPS = ['experiencia', 'disponibilidade', 'seguranca', 'seguro'];
 
 // correspondência simples por palavra-chave (RF-04 / RF-28)
+// Exige confian\u00e7a m\u00ednima (>=2 palavras-chave, ou 1 suficientemente espec\u00edfica) antes de
+// aceitar a correspond\u00eancia \u2014 sen\u00e3o uma palavra curta e comum ("horas", "tempo", "idade")
+// ganha por acaso em perguntas completamente sem rela\u00e7\u00e3o (ex.: "que horas s\u00e3o no Jap\u00e3o").
+PEDAL.MIN_FAQ_CONFIDENCE = 7;
 PEDAL.matchFAQ = function (text) {
-  const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const t = norm(text);
-  let best = null, bestScore = 0;
-  for (const f of PEDAL.FAQ) {
-    let score = 0;
-    for (const k of f.keywords) { if (t.includes(norm(k))) score += k.length; }
-    if (score > bestScore) { bestScore = score; best = f; }
-  }
-  return bestScore > 0 ? best : null;
+  return PEDAL.matchIn(PEDAL.FAQ, text);
 };
 
 // ── Questionário estruturado (RF-12) ──────────────────────────────────
@@ -331,13 +327,14 @@ PEDAL.ACTIVE_CHIPS = ['af_rever_formacao', 'af_marcar_passeio', 'af_levantar_tri
 PEDAL.matchIn = function (list, text) {
   const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const t = norm(text);
-  let best = null, bestScore = 0;
+  let best = null, bestScore = 0, bestCount = 0;
   for (const f of list) {
-    let score = 0;
-    for (const k of f.keywords) { if (t.includes(norm(k))) score += k.length; }
-    if (score > bestScore) { bestScore = score; best = f; }
+    let score = 0, count = 0;
+    for (const k of f.keywords) { if (t.includes(norm(k))) { score += k.length; count += 1; } }
+    if (score > bestScore) { bestScore = score; bestCount = count; best = f; }
   }
-  return bestScore > 0 ? best : null;
+  if (bestCount >= 2) return best; // v\u00e1rias palavras-chave batem certo \u2014 confian\u00e7a alta
+  return bestScore >= PEDAL.MIN_FAQ_CONFIDENCE ? best : null; // s\u00f3 1, exige ser suficientemente espec\u00edfica
 };
 
 // Gera uma palavra-passe inicial legível (enviada por email após a inscrição)
