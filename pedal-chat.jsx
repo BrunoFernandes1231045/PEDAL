@@ -327,6 +327,10 @@ function ChatView({ store, tone = 'caloroso' }) {
       if (store.generalKnowledge) context.push(store.generalKnowledge);
       const res = await store.askAI(q, context);
       if (res && res.confident && res.answer) { say([{ text: res.answer }], () => setInteraction(interactionFor(node))); return; }
+      if (res && res.onTopic === false) {
+        say([{ text: 'Essa pergunta não tem a ver com a Pedalar Sem Idade ou com o processo de voluntariado — só te consigo ajudar com esses temas. 😊' }], () => setInteraction(interactionFor(node)));
+        return;
+      }
     }
     autoSubmitDoubt(q);
     say([{ text: 'Não tenho uma resposta certa para isso — enviei a tua dúvida à equipa. Respondem-te aqui em breve. 🙏' }], () => setInteraction(interactionFor(node)));

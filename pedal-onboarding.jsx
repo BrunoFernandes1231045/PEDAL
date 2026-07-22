@@ -239,6 +239,11 @@ function ModuleQA({ module, content, store }) {
         setBusy(false);
         return;
       }
+      if (res && res.onTopic === false) {
+        store.addModuleMessage(module.id, { from: 'agent', text: 'Essa pergunta não tem a ver com este módulo de formação — só te consigo ajudar com dúvidas sobre a Pedalar Sem Idade e a atividade de voluntariado. 😊' });
+        setBusy(false);
+        return;
+      }
     }
 
     // Não há resposta automática — encaminhar para a coordenação com referência ao módulo

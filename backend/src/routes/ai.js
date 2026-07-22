@@ -12,17 +12,18 @@ const MAX_CONTEXT_CHARS = 12000; // limite de segurança, independente do que o 
 
 const SYSTEM_INSTRUCTION = `És o assistente digital da Pedalar Sem Idade Porto, uma associação que oferece passeios de triciclo elétrico a pessoas idosas com mobilidade reduzida.
 
-REGRA 1 — TEMA: só respondes a perguntas sobre a Pedalar Sem Idade, o processo de candidatura a piloto voluntário, a formação, ou a atividade de voluntariado em si.
-Se a pergunta for sobre qualquer outro assunto (matemática, cultura geral, notícias, outras empresas, ou qualquer coisa sem relação com a Pedalar Sem Idade) — MESMO QUE SAIBAS RESPONDER-LHE — responde exatamente: {"confident": false}
+REGRA 1 — TEMA: primeiro decide se a pergunta é sobre a Pedalar Sem Idade, o processo de candidatura a piloto voluntário, a formação, ou a atividade de voluntariado em si.
+Se NÃO for sobre nenhum destes temas (matemática, cultura geral, notícias, outras empresas, piadas, ou qualquer coisa sem relação com a Pedalar Sem Idade) — MESMO QUE SAIBAS RESPONDER-LHE — responde exatamente: {"onTopic": false, "confident": false}
 Não uses conhecimento geral fora deste tema, mesmo que a pergunta pareça inofensiva ou trivial.
 
-REGRA 2 — CONTEXTO: dentro do tema, respondes SÓ com base no CONTEXTO que te é dado a seguir — nunca inventes políticas, preços, datas, nomes de pessoas, ou prometas algo que não esteja explícito no contexto.
-Se a resposta não estiver claramente no contexto, responde exatamente: {"confident": false}
+REGRA 2 — CONTEXTO: se a pergunta FOR sobre o tema, respondes SÓ com base no CONTEXTO que te é dado a seguir — nunca inventes políticas, preços, datas, nomes de pessoas, ou prometas algo que não esteja explícito no contexto.
+Se a resposta não estiver claramente no contexto, responde exatamente: {"onTopic": true, "confident": false}
 
-REGRA 3 — FORMATO: quando respondes, é sempre em JSON estrito, sem markdown e sem texto fora do JSON: {"confident": true, "answer": "..."}
+REGRA 3 — FORMATO: quando sabes responder, é sempre em JSON estrito, sem markdown e sem texto fora do JSON: {"onTopic": true, "confident": true, "answer": "..."}
 A resposta ("answer") deve ser curta (1 a 3 frases), em português de Portugal, num tom caloroso e direto.
 
-Na dúvida entre responder ou não, escolhe sempre {"confident": false} — uma pergunta sem resposta segue para a coordenação, o que é sempre seguro.`;
+Na dúvida entre "onTopic: true" ou "false", escolhe sempre "true" — é mais seguro tratar como dentro do tema e responder {"onTopic": true, "confident": false} do que descartar uma pergunta legítima.
+Na dúvida entre responder ou não dentro do tema, escolhe sempre {"onTopic": true, "confident": false} — uma pergunta sem resposta segue para a coordenação, o que é sempre seguro.`;
 
 // Limite simples de pedidos por IP — não há autenticação obrigatória neste endpoint
 // (candidatos podem perguntar antes de terem conta), por isso não há um id de
@@ -61,8 +62,9 @@ router.post('/ask', async (req, res) => {
     const result = await model.generateContent(prompt);
     const raw = result.response.text().trim().replace(/^```json\s*|\s*```$/g, '');
     const parsed = JSON.parse(raw);
-    if (parsed && parsed.confident && parsed.answer) return res.json({ confident: true, answer: parsed.answer });
-    return res.json({ confident: false });
+    if (parsed && parsed.confident && parsed.answer) return res.json({ onTopic: true, confident: true, answer: parsed.answer });
+    if (parsed && parsed.onTopic === false) return res.json({ onTopic: false, confident: false });
+    return res.json({ onTopic: true, confident: false });
   } catch (err) {
     console.error('[ai] erro ao pedir resposta à Gemini:', err.message);
     return res.json({ confident: false });
