@@ -315,18 +315,27 @@ function ChatView({ store, tone = 'caloroso' }) {
     setInteraction({ type: 'card:doubt', sent: true });
   }
 
-  // tenta responder com a base de conhecimento; se não souber, envia automaticamente à coordenação
+  // tenta responder com a FAQ; se falhar e a IA estiver ligada, tenta a IA; se
+  // nenhuma souber responder, envia automaticamente à coordenação.
+  async function answerOrEscalate(q, active) {
+    const f = active ? (P.matchIn(P.ACTIVE_FAQ, q) || P.matchFAQ(q)) : P.matchFAQ(q);
+    if (f) { say([{ text: f.a }], () => setInteraction(interactionFor(node))); return; }
+    if (store.aiEnabled) {
+      setTyping(true);
+      const faqList = active ? P.ACTIVE_FAQ : P.FAQ;
+      const context = faqList.map((x) => `P: ${x.q}\nR: ${x.a}`);
+      const res = await store.askAI(q, context);
+      if (res && res.confident && res.answer) { say([{ text: res.answer }], () => setInteraction(interactionFor(node))); return; }
+    }
+    autoSubmitDoubt(q);
+    say([{ text: 'Não tenho uma resposta certa para isso — enviei a tua dúvida à equipa. Respondem-te aqui em breve. 🙏' }], () => setInteraction(interactionFor(node)));
+  }
+
   function tryAnswerDoubt(question) {
     const q = (question || '').trim(); if (!q) return;
     addMessage({ from: 'user', text: q });
     setInteraction(null);
-    const active = S.stage === 'ativo';
-    const f = active ? (P.matchIn(P.ACTIVE_FAQ, q) || P.matchFAQ(q)) : P.matchFAQ(q);
-    if (f) say([{ text: f.a }], () => setInteraction(interactionFor(node)));
-    else {
-      autoSubmitDoubt(q);
-      say([{ text: 'Não tenho uma resposta certa para isso — enviei a tua dúvida à equipa. Respondem-te aqui em breve. 🙏' }], () => setInteraction(interactionFor(node)));
-    }
+    answerOrEscalate(q, S.stage === 'ativo');
   }
 
   // pedido de novas datas para a formação prática (antes ou depois de aceitar)
@@ -359,13 +368,7 @@ function ChatView({ store, tone = 'caloroso' }) {
   function handleSend(text) {
     const t = text.trim(); if (!t) return;
     addMessage({ from: 'user', text: t });
-    const active = S.stage === 'ativo';
-    const f = active ? (P.matchIn(P.ACTIVE_FAQ, t) || P.matchFAQ(t)) : P.matchFAQ(t);
-    if (f) say([{ text: f.a }], () => setInteraction(interactionFor(node)));
-    else {
-      autoSubmitDoubt(t);
-      say([{ text: 'Não tenho uma resposta certa para isso — enviei a tua dúvida à equipa. Respondem-te aqui em breve. 🙏' }], () => setInteraction(interactionFor(node)));
-    }
+    answerOrEscalate(t, S.stage === 'ativo');
   }
 
   // ── ciclo de vida ────────────────────────────────────────────

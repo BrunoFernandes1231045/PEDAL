@@ -1,7 +1,7 @@
 /* pedal-coord-formacao.jsx — Fase 3 (coordenação):
    confirmar/rejeitar o fim da formação prática + upload de vídeos e info por fase */
 
-const { useState: useStateCF, useRef: useRefCF } = React;
+const { useState: useStateCF, useRef: useRefCF, useEffect: useEffectCF } = React;
 
 // ── Modal: confirmar conclusão ou rejeitar o piloto na formação prática ──
 function PracticalCompleteModal({ c, store, onClose, startEditing }) {
@@ -352,15 +352,35 @@ function ModuleContentAdmin({ store }) {
 
 function ModuleContentRow({ module, index, content, store }) {
   const videos = content.videos || (content.video ? [content.video] : []);
-  const docs = content.docs || [];
+  const docs = (store.moduleDocuments || {})[module.id] || [];
+  const savedInfo = (store.moduleAgentInfo || {})[module.id] || '';
   const [vurl, setVurl] = useStateCF('');
-  const [info, setInfo] = useStateCF(content.agentInfo || '');
+  const [info, setInfo] = useStateCF(savedInfo);
   const [infoSaved, setInfoSaved] = useStateCF(false);
-  const infoDirty = info.trim() !== (content.agentInfo || '');
+  const [uploadingDocs, setUploadingDocs] = useStateCF(false);
+  const [docsErr, setDocsErr] = useStateCF(null);
+  const infoDirty = info.trim() !== savedInfo;
+
+  // moduleAgentInfo chega de um fetch assíncrono — sincroniza o campo quando os
+  // dados reais chegarem (se ainda não tiveres começado a escrever nada de novo).
+  useEffectCF(() => {
+    if (!infoDirty) setInfo(savedInfo);
+    // eslint-disable-next-line
+  }, [savedInfo]);
+
   const addVideo = () => { const u = vurl.trim(); if (!u) return; store.setModuleContent(module.id, { videos: [...videos, u], video: null }); setVurl(''); };
   const rmVideo = (i) => store.setModuleContent(module.id, { videos: videos.filter((_, j) => j !== i) });
-  const addDocs = (fileList) => { const names = Array.from(fileList || []).map((f) => f.name).filter(Boolean); if (!names.length) return; store.setModuleContent(module.id, { docs: [...docs, ...names] }); };
-  const rmDoc = (i) => store.setModuleContent(module.id, { docs: docs.filter((_, j) => j !== i) });
+  const addDocs = async (fileList) => {
+    const files = Array.from(fileList || []).filter((f) => f.type === 'application/pdf');
+    if (!files.length) { setDocsErr('Só é possível carregar ficheiros PDF.'); return; }
+    setDocsErr(null); setUploadingDocs(true);
+    for (const file of files) {
+      const res = await store.uploadModuleDocument(module.id, file);
+      if (!res || !res.ok) { setDocsErr((res && res.error) || 'Erro ao enviar o ficheiro'); break; }
+    }
+    setUploadingDocs(false);
+  };
+  const rmDoc = (i) => store.removeModuleDocument(module.id, i);
   const short = (u) => { const s = u.replace(/^https?:\/\/(www\.)?/, ''); return s.length > 40 ? s.slice(0, 40) + '…' : s; };
   return (
     <div className="pedal-modadminrow">
@@ -393,21 +413,22 @@ function ModuleContentRow({ module, index, content, store }) {
       </div>
 
       <div style={{ marginTop: 11 }}>
-        <div style={{ font: '600 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="doc" size={12} color="var(--primary)" />Documentos (base de conhecimento)</div>
+        <div style={{ font: '600 11px var(--ui)', color: 'var(--ink-soft)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="doc" size={12} color="var(--primary)" />Documentos (base de conhecimento da IA)</div>
         {docs.length > 0 && (
           <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
-            {docs.map((u, i) => (
+            {docs.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="pedal-videochip" style={{ flex: 1, minWidth: 0 }}><Icon name="doc" size={13} color="var(--primary)" /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u}</span></span>
+                <a href={d.url} target="_blank" rel="noreferrer" className="pedal-videochip" style={{ flex: 1, minWidth: 0, textDecoration: 'none' }}><Icon name="doc" size={13} color="var(--primary)" /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name || short(d.url)}</span></a>
                 <button className="pedal-authlink" style={{ color: 'var(--ink-soft)' }} onClick={() => rmDoc(i)}>Remover</button>
               </div>
             ))}
           </div>
         )}
         <label className="pedal-uploadbtn" style={{ cursor: 'pointer' }}>
-          <input type="file" multiple style={{ display: 'none' }} onChange={(e) => { addDocs(e.target.files); e.target.value = ''; }} />
-          <Icon name="doc" size={15} />Carregar documentos
+          <input type="file" accept="application/pdf" multiple style={{ display: 'none' }} disabled={uploadingDocs} onChange={(e) => { addDocs(e.target.files); e.target.value = ''; }} />
+          <Icon name="doc" size={15} />{uploadingDocs ? 'A enviar…' : 'Carregar documentos (PDF)'}
         </label>
+        {docsErr && <div style={{ font: '600 12px var(--ui)', color: 'var(--primary-deep)', marginTop: 6 }}>{docsErr}</div>}
       </div>
 
       <div style={{ marginTop: 11 }}>
@@ -418,7 +439,7 @@ function ModuleContentRow({ module, index, content, store }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
           {infoSaved && !infoDirty && <span style={{ font: '600 12px var(--ui)', color: 'var(--accent-deep)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="check" size={14} color="var(--accent-deep)" />Alterações gravadas</span>}
           <button className="pedal-taskbtn primary" disabled={!infoDirty} style={{ whiteSpace: 'nowrap', flexShrink: 0, opacity: infoDirty ? 1 : 0.5 }}
-            onClick={() => { store.setModuleContent(module.id, { agentInfo: info.trim() }); setInfoSaved(true); }}><Icon name="check" size={14} color="#fff" />Gravar alterações</button>
+            onClick={async () => { const res = await store.saveModuleAgentInfo(module.id, info.trim()); if (res && res.ok) setInfoSaved(true); }}><Icon name="check" size={14} color="#fff" />Gravar alterações</button>
         </div>
       </div>
     </div>

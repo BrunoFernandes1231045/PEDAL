@@ -216,33 +216,45 @@ function ModuleQA({ module, content, store }) {
   const [v, setV] = useStateO('');
   const [busy, setBusy] = useStateO(false);
 
-  const handleQuestion = (q) => {
+  const handleQuestion = async (q) => {
     if (!q || busy) return;
     setBusy(true);
     store.addModuleMessage(module.id, { from: 'user', text: q });
-    setTimeout(() => {
-      const tf = P.matchIn(P.TRAINING_FAQ, q);
-      if (tf) {
-        store.addModuleMessage(module.id, { from: 'agent', text: tf.a });
-      } else if (content && content.agentInfo) {
-        store.addModuleMessage(module.id, { from: 'agent', text: `Sobre «${module.title}»: ${content.agentInfo}` });
-      } else {
-        // Não há resposta automática — encaminhar para a coordenação com referência ao módulo
-        const C = store.S.candidate || {};
-        store.addContactRequest({
-          name: C.name || 'Voluntário',
-          contact: C.contact || '',
-          email: C.email || '',
-          question: q,
-          live: true,
-          moduleId: module.id,
-          moduleTitle: module.title,
-        });
-        store.notify({ type: 'contacto', text: `enviou uma dúvida sobre o módulo «${module.title}»` });
-        store.addModuleMessage(module.id, { from: 'agent', text: `Boa pergunta — não tenho uma resposta certa para te dar sobre isto. Enviei-a à coordenação com a referência a este módulo. A resposta aparece aqui mesmo assim que estiver pronta. 💛` });
-      }
+    await new Promise((r) => setTimeout(r, 650)); // pausa breve, dá sensação de "a pensar"
+
+    const tf = P.matchIn(P.TRAINING_FAQ, q);
+    if (tf) {
+      store.addModuleMessage(module.id, { from: 'agent', text: tf.a });
       setBusy(false);
-    }, 650);
+      return;
+    }
+
+    const agentInfo = (store.moduleAgentInfo || {})[module.id] || '';
+    const docs = (store.moduleDocuments || {})[module.id] || [];
+    const context = [agentInfo, ...docs.map((d) => d.text || '')].filter(Boolean);
+    if (context.length) {
+      const res = await store.askAI(q, context);
+      if (res && res.confident && res.answer) {
+        store.addModuleMessage(module.id, { from: 'agent', text: res.answer });
+        setBusy(false);
+        return;
+      }
+    }
+
+    // Não há resposta automática — encaminhar para a coordenação com referência ao módulo
+    const C = store.S.candidate || {};
+    store.addContactRequest({
+      name: C.name || 'Voluntário',
+      contact: C.contact || '',
+      email: C.email || '',
+      question: q,
+      live: true,
+      moduleId: module.id,
+      moduleTitle: module.title,
+    });
+    store.notify({ type: 'contacto', text: `enviou uma dúvida sobre o módulo «${module.title}»` });
+    store.addModuleMessage(module.id, { from: 'agent', text: `Boa pergunta — não tenho uma resposta certa para te dar sobre isto. Enviei-a à coordenação com a referência a este módulo. A resposta aparece aqui mesmo assim que estiver pronta. 💛` });
+    setBusy(false);
   };
 
   const ask = () => { const q = v.trim(); if (!q) return; setV(''); handleQuestion(q); };

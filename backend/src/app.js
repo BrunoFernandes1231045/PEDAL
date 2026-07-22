@@ -15,8 +15,10 @@ const localitiesRouter = require('./routes/localities');
 const settingsRouter = require('./routes/settings');
 const authConfigRouter = require('./routes/authConfig');
 const documentsRouter = require('./routes/documents');
+const aiRouter = require('./routes/ai');
 
 const app = express();
+app.set('trust proxy', true); // necessário para req.ip (limite de pedidos da IA) ser o IP real por trás do proxy do Railway
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', '..')));
@@ -28,6 +30,7 @@ app.get('/recuperar-palavra-passe', (req, res) => res.sendFile(path.join(__dirna
 app.get('/nova-palavra-passe', (req, res) => res.sendFile(path.join(__dirname, '..', '..', 'nova-palavra-passe.html')));
 app.use('/api/auth-config', authConfigRouter);
 app.use('/api/documents', documentsRouter);
+app.use('/api/ai', aiRouter);
 app.use('/api/candidates', candidatesRouter);
 app.use('/api/candidates/:id/messages', messagesRouter);
 app.use('/api/candidates/:id/onboarding', onboardingRouter);

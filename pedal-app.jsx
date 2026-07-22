@@ -61,6 +61,9 @@ function App() {
   const [realNeeds, setRealNeeds] = useStateA(null);
   const [introVideoUrl, setIntroVideoUrl] = useStateA(null);
   const [documentUrls, setDocumentUrls] = useStateA({}); // { [settingsKey]: { url, name } }
+  const [moduleAgentInfo, setModuleAgentInfo] = useStateA({}); // { [moduleId]: texto }
+  const [moduleDocuments, setModuleDocuments] = useStateA({}); // { [moduleId]: [{ url, name, text }] }
+  const [aiEnabled, setAiEnabled] = useStateA(false);
   const [realStations, setRealStations] = useStateA(null);
   const [realLocalities, setRealLocalities] = useStateA(null);
   const [realNotifs, setRealNotifs] = useStateA(null);
@@ -427,6 +430,36 @@ function App() {
     });
   }, []);
 
+  // Base de conhecimento por módulo (informação escrita + documentos) — usada pela IA.
+  useEffectA(() => {
+    fetch('/api/settings/module_agentinfo')
+      .then((r) => r.json())
+      .then((data) => { if (data && typeof data === 'object') setModuleAgentInfo(data); })
+      .catch(() => {});
+    fetch('/api/settings/module_documents')
+      .then((r) => r.json())
+      .then((data) => { if (data && typeof data === 'object') setModuleDocuments(data); })
+      .catch(() => {});
+  }, []);
+
+  useEffectA(() => {
+    fetch('/api/ai/config')
+      .then((r) => r.json())
+      .then((data) => { if (data && data.aiEnabled) setAiEnabled(true); })
+      .catch(() => {});
+  }, []);
+  // Pergunta livre à IA quando a correspondência por palavra-chave (FAQ) falha.
+  // "context" é uma lista de textos (FAQ geral, ou info+documentos de um módulo)
+  // que o chamador decide — este helper só faz o pedido e devolve {confident, answer?}.
+  const askAI = (question, context) => {
+    if (!aiEnabled) return Promise.resolve({ confident: false });
+    return fetch('/api/ai/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, context }),
+    }).then((r) => r.json()).catch(() => ({ confident: false }));
+  };
+
   // Refetch needs quando o candidato chega ao formulário de triagem — garante dados frescos
   useEffectA(() => {
     if (S.chat && S.chat.node === 'triage') {
@@ -597,7 +630,7 @@ function App() {
       headers: { 'Authorization': `Bearer ${coordJwt}` },
       body: form,
     }).then((r) => r.json().then((data) => {
-      if (r.ok && data && data.url) return { ok: true, url: data.url, name: data.name };
+      if (r.ok && data && data.url) return { ok: true, url: data.url, name: data.name, text: data.text };
       return { ok: false, error: (data && data.error) || 'Erro ao enviar o ficheiro' };
     })).catch(() => ({ ok: false, error: 'Erro de rede' }));
   };
@@ -606,6 +639,51 @@ function App() {
     if (!res.ok) return res;
     return saveDocumentUrl(doc.settingsKey, res.url, res.name);
   });
+
+  // Base de conhecimento por módulo — "Informação para o agente" e documentos,
+  // gravados no backend (antes só ficavam em S.moduleContent, no localStorage) para
+  // a IA os poder usar como contexto.
+  const saveModuleAgentInfo = (moduleId, text) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
+    const next = { ...moduleAgentInfo, [moduleId]: text };
+    return fetch('/api/settings/module_agentinfo', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify(next),
+    }).then((r) => r.json().then((data) => {
+      if (r.ok) { setModuleAgentInfo(data || {}); return { ok: true }; }
+      return { ok: false, error: (data && data.error) || 'Erro ao guardar' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
+  const uploadModuleDocument = (moduleId, file) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
+    return uploadDocument(file, `module_${moduleId}`).then((res) => {
+      if (!res.ok) return res;
+      const list = [...(moduleDocuments[moduleId] || []), { url: res.url, name: res.name, text: res.text || '' }];
+      const next = { ...moduleDocuments, [moduleId]: list };
+      return fetch('/api/settings/module_documents', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+        body: JSON.stringify(next),
+      }).then((r) => r.json().then((data) => {
+        if (r.ok) { setModuleDocuments(data || {}); return { ok: true }; }
+        return { ok: false, error: (data && data.error) || 'Erro ao guardar' };
+      })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+    });
+  };
+  const removeModuleDocument = (moduleId, index) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
+    const list = (moduleDocuments[moduleId] || []).filter((_, i) => i !== index);
+    const next = { ...moduleDocuments, [moduleId]: list };
+    return fetch('/api/settings/module_documents', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify(next),
+    }).then((r) => r.json().then((data) => {
+      if (r.ok) { setModuleDocuments(data || {}); return { ok: true }; }
+      return { ok: false, error: (data && data.error) || 'Erro ao guardar' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
 
   const saveNeedsSchedule = (schedule) => {
     if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
@@ -693,7 +771,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveDocumentUrl, uploadDocument, uploadAndSaveDocument, documentUrls, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveDocumentUrl, uploadDocument, uploadAndSaveDocument, documentUrls, saveModuleAgentInfo, uploadModuleDocument, removeModuleDocument, moduleAgentInfo, moduleDocuments, aiEnabled, askAI, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;
