@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const router = express.Router();
 const supabase = require('../db/supabase');
 const { requireAuth, requireCoordinator } = require('../middleware/auth');
@@ -29,7 +29,11 @@ router.post('/', requireAuth, requireCoordinator, upload.single('file'), async (
 
   let text = null;
   if (req.file.mimetype === 'application/pdf') {
-    try { text = (await pdfParse(req.file.buffer)).text; } catch (_) { text = null; }
+    try {
+      const parser = new PDFParse({ data: req.file.buffer });
+      text = (await parser.getText()).text;
+      await parser.destroy();
+    } catch (err) { console.error('[documents] erro ao extrair texto do PDF:', err.message); text = null; }
   }
 
   const { data } = supabase.storage.from('documents').getPublicUrl(path);
