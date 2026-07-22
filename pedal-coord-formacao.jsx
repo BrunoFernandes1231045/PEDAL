@@ -284,6 +284,51 @@ function RgpdConsentAdmin({ store }) {
   );
 }
 
+// Base de conhecimento geral (não específica de um módulo) — alimenta as respostas da
+// IA no chat principal, ao lado da FAQ fixa do código. Texto livre (cola aqui FAQs,
+// contactos dos capitães de zona, procedimentos, etc.).
+function GeneralKnowledgeAdmin({ store }) {
+  const [text, setText] = useStateCF(store.generalKnowledge || '');
+  const [saving, setSaving] = useStateCF(false);
+  const [saved, setSaved] = useStateCF(false);
+  const [err, setErr] = useStateCF(null);
+  const dirty = text.trim() !== (store.generalKnowledge || '').trim();
+
+  useEffectCF(() => {
+    if (!dirty) setText(store.generalKnowledge || '');
+    // eslint-disable-next-line
+  }, [store.generalKnowledge]);
+
+  const handleSave = async () => {
+    setSaving(true); setErr(null);
+    const result = await store.saveGeneralKnowledge(text.trim());
+    setSaving(false);
+    if (result && result.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+    else setErr((result && result.error) || 'Erro ao guardar');
+  };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ font: '700 11px var(--ui)', letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--ink-soft)', paddingBottom: 10, borderBottom: '2px solid var(--line)', marginBottom: 14 }}>
+        Base de conhecimento geral (IA)
+      </div>
+      <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 10px' }}>
+        Texto usado pela IA para responder a dúvidas no chat principal quando a FAQ do código não chega (ex.: FAQs completas, contactos dos capitães de zona, procedimentos). Não é mostrado diretamente a ninguém — só serve de contexto às respostas.
+      </p>
+      <textarea className="pedal-agentinfo" style={{ minHeight: 220 }} value={text}
+        onChange={(e) => { setText(e.target.value); setSaved(false); }}
+        placeholder="Cola aqui as FAQs, contactos e procedimentos que a IA deve conhecer…" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+        {saved && !dirty && <span style={{ font: '600 12px var(--ui)', color: 'var(--accent-deep)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="check" size={14} color="var(--accent-deep)" />Alterações gravadas</span>}
+        {err && <span style={{ font: '600 12px var(--ui)', color: 'var(--primary-deep)' }}>{err}</span>}
+        <button className="pedal-taskbtn primary" disabled={!dirty} style={{ whiteSpace: 'nowrap', flexShrink: 0, opacity: dirty ? 1 : 0.5 }} onClick={handleSave}>
+          <Icon name="check" size={14} color="#fff" />Gravar alterações
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function IntroVideoAdmin({ store }) {
   const [url, setUrl] = useStateCF(store.introVideoUrl || '');
   const [saved, setSaved] = useStateCF(false);
@@ -334,6 +379,7 @@ function ModuleContentAdmin({ store }) {
         <span style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Vídeos & conteúdos</span>
       </div>
       <IntroVideoAdmin store={store} />
+      <GeneralKnowledgeAdmin store={store} />
       <RgpdConsentAdmin store={store} />
       <div style={{ font: '700 11px var(--ui)', letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--ink-soft)', paddingBottom: 10, borderBottom: '2px solid var(--line)', marginBottom: 14 }}>
         Formação

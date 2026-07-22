@@ -63,6 +63,7 @@ function App() {
   const [documentUrls, setDocumentUrls] = useStateA({}); // { [settingsKey]: { url, name } }
   const [moduleAgentInfo, setModuleAgentInfo] = useStateA({}); // { [moduleId]: texto }
   const [moduleDocuments, setModuleDocuments] = useStateA({}); // { [moduleId]: [{ url, name, text }] }
+  const [generalKnowledge, setGeneralKnowledge] = useStateA(''); // texto/FAQ geral para o chat principal
   const [aiEnabled, setAiEnabled] = useStateA(false);
   const [realStations, setRealStations] = useStateA(null);
   const [realLocalities, setRealLocalities] = useStateA(null);
@@ -440,6 +441,10 @@ function App() {
       .then((r) => r.json())
       .then((data) => { if (data && typeof data === 'object') setModuleDocuments(data); })
       .catch(() => {});
+    fetch('/api/settings/general_knowledge')
+      .then((r) => r.json())
+      .then((data) => { if (data && data.text) setGeneralKnowledge(data.text); })
+      .catch(() => {});
   }, []);
 
   useEffectA(() => {
@@ -640,6 +645,20 @@ function App() {
     return saveDocumentUrl(doc.settingsKey, res.url, res.name);
   });
 
+  // Base de conhecimento GERAL (não específica de um módulo) — alimenta o fallback de
+  // IA do chat principal, ao lado da FAQ fixa do código.
+  const saveGeneralKnowledge = (text) => {
+    if (!coordJwt) return Promise.resolve({ ok: false, error: 'Sem sessão activa' });
+    return fetch('/api/settings/general_knowledge', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${coordJwt}` },
+      body: JSON.stringify({ text }),
+    }).then((r) => r.json().then((data) => {
+      if (r.ok) { setGeneralKnowledge((data && data.text) || ''); return { ok: true }; }
+      return { ok: false, error: (data && data.error) || 'Erro ao guardar' };
+    })).catch(() => ({ ok: false, error: 'Erro de rede' }));
+  };
+
   // Base de conhecimento por módulo — "Informação para o agente" e documentos,
   // gravados no backend (antes só ficavam em S.moduleContent, no localStorage) para
   // a IA os poder usar como contexto.
@@ -771,7 +790,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveDocumentUrl, uploadDocument, uploadAndSaveDocument, documentUrls, saveModuleAgentInfo, uploadModuleDocument, removeModuleDocument, moduleAgentInfo, moduleDocuments, aiEnabled, askAI, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveDocumentUrl, uploadDocument, uploadAndSaveDocument, documentUrls, saveModuleAgentInfo, uploadModuleDocument, removeModuleDocument, moduleAgentInfo, moduleDocuments, generalKnowledge, saveGeneralKnowledge, aiEnabled, askAI, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;

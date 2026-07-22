@@ -324,6 +324,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       setTyping(true);
       const faqList = active ? P.ACTIVE_FAQ : P.FAQ;
       const context = faqList.map((x) => `P: ${x.q}\nR: ${x.a}`);
+      if (store.generalKnowledge) context.push(store.generalKnowledge);
       const res = await store.askAI(q, context);
       if (res && res.confident && res.answer) { say([{ text: res.answer }], () => setInteraction(interactionFor(node))); return; }
     }
