@@ -52,7 +52,6 @@ function App() {
   const [S, setS] = useStateA(loadStore);
   const [view, setView] = useStateA(window.__PEDAL_MODE === 'coord' ? 'coordination' : 'candidate');
   const [resetKey, setResetKey] = useStateA(0);
-  const [scale, setScale] = useStateA(1);
   const [coordJwt, setCoordJwtRaw] = useStateA(null); // não persiste no localStorage
   const [coordRole, setCoordRoleRaw] = useStateA(null);
   const [coordProfile, setCoordProfileRaw] = useStateA(null); // não persiste no localStorage — isolado por tab
@@ -243,16 +242,6 @@ function App() {
         .catch(() => {});
     }
   }, [S.account]);
-
-  useEffectA(() => {
-    if (view !== 'candidate') { setScale(1); return; }
-    const fit = () => {
-      const s = Math.min(1, (window.innerHeight - 92) / 860, (window.innerWidth - 28) / 402);
-      setScale(Math.max(0.5, s));
-    };
-    fit(); window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, [view]);
 
   // ── store helpers (functional updates) ──
   const addMessage = (m) => setS((p) => ({ ...p, messages: [...p.messages, { id: m.id || ('m' + Math.random().toString(36).slice(2, 9)), ...m }] }));
@@ -812,36 +801,29 @@ function App() {
     <div className="pedal-stage" style={themeVars}>
       <div className="pedal-topbar">
         <div className="pedal-brandmini"><img src={window.__PEDAL_LOGO} alt="Pedalar Sem Idade Porto" className="pedal-logo" /><span className="pedal-brandsep">·</span><PedalMark size={20} color="var(--primary)" /><span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>PEDAL<em style={{ font: '400 9.5px var(--ui)', fontStyle: 'italic', color: 'var(--ink-soft)', letterSpacing: 0, fontWeight: 400 }}>Direito a vento no cabelo</em></span></div>
-        {window.__PEDAL_MODE !== 'coord' && <button className="pedal-reset" onClick={reset} title="Recomeçar a demonstração">Recomeçar</button>}
       </div>
 
       {view === 'candidate' ? (
-        <div className="pedal-phonewrap">
-          <div className="pedal-phonescale" style={{ transform: `scale(${scale})` }}>
-            <IOSDevice width={402} height={860}>
-              <div className="pedal-app" style={themeVars}>
-                <div className="pedal-viewport">
-                  <div style={{ display: S.tab === 'conversa' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
-                    <ChatView key={resetKey} store={store} tone={tone} />
-                  </div>
-                  {S.tab === 'formacao' && <FormacaoView store={store} />}
-                  {S.tab === 'processo' && <ProcessoView store={store} />}
-                  {S.tab === 'perfil' && <ProfileView store={store} />}
-                </div>
-                <div className="pedal-tabbar">
-                  {tabs.map((tb) => (
-                    <button key={tb.id} className={'pedal-tab' + (S.tab === tb.id ? ' on' : '')} onClick={() => goTab(tb.id)}>
-                      <span style={{ position: 'relative' }}>
-                        <Icon name={tb.icon} size={22} />
-                        {tb.id === 'formacao' && unlocked && obCount < window.PEDAL.MODULES.length && <span className="pedal-tabbadge" />}
-                        {tb.id === 'conversa' && formalizePending && <span className="pedal-tabbadge" />}
-                      </span>
-                      <span>{tb.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </IOSDevice>
+        <div className="pedal-app" style={themeVars}>
+          <div className="pedal-viewport">
+            <div style={{ display: S.tab === 'conversa' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
+              <ChatView key={resetKey} store={store} tone={tone} />
+            </div>
+            {S.tab === 'formacao' && <FormacaoView store={store} />}
+            {S.tab === 'processo' && <ProcessoView store={store} />}
+            {S.tab === 'perfil' && <ProfileView store={store} />}
+          </div>
+          <div className="pedal-tabbar">
+            {tabs.map((tb) => (
+              <button key={tb.id} className={'pedal-tab' + (S.tab === tb.id ? ' on' : '')} onClick={() => goTab(tb.id)}>
+                <span style={{ position: 'relative' }}>
+                  <Icon name={tb.icon} size={22} />
+                  {tb.id === 'formacao' && unlocked && obCount < window.PEDAL.MODULES.length && <span className="pedal-tabbadge" />}
+                  {tb.id === 'conversa' && formalizePending && <span className="pedal-tabbadge" />}
+                </span>
+                <span>{tb.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       ) : coordJwt ? (
