@@ -783,10 +783,9 @@ function App() {
       moduleContent: S.moduleContent || {},
       mgmtUsers: S.mgmtUsers && S.mgmtUsers.length ? S.mgmtUsers : INITIAL.mgmtUsers.map((u) => ({ ...u })),
       coordProfile: { ...INITIAL.coordProfile, ...(S.coordProfile || {}) },
-      moduleConversations: S.moduleConversations || {},
     };
     localStorage.removeItem(STORE_KEY);
-    setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, ...coordData });
+    setS({ ...INITIAL, candidate: { ...INITIAL.candidate, localities: [] }, messages: [], notifs: [], onboarding: { done: {}, roleAccepted: false }, chat: { node: 'welcome', interviewStep: 0 }, scheduling: {}, overrides: {}, moduleConversations: {}, contactRequests: INITIAL.contactRequests.map((c) => ({ ...c })), account: null, session: { authed: false }, signature: null, termsAccepted: false, ...coordData });
     setResetKey((k) => k + 1);
   };
 
