@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../db/supabase');
 const { requireAuth, requireCoordinator, requireRole } = require('../middleware/auth');
+const { notifyScheduleChange } = require('../lib/scheduleEmails');
 
 function genPassword() {
   const words = ['pedal', 'bici', 'porto', 'piloto', 'rota'];
@@ -109,6 +110,13 @@ router.patch('/:id', requireAuth, async (req, res) => {
     .eq('id', id).select().single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+
+  // Aviso por email ao candidato — só quando é a coordenação a propor/editar
+  // horários ou a confirmar um definitivo, nunca quando é o próprio candidato
+  // a responder a uma proposta (não faz sentido avisá-lo do que ele mesmo fez).
+  if (req.user.role === 'coordinator' && body.scheduling) {
+    notifyScheduleChange({ name: data.name, email: data.email }, data.scheduling);
+  }
 });
 
 module.exports = router;
