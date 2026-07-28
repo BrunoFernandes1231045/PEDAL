@@ -1,6 +1,9 @@
 {
   "name": "pedal",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "backend": "cd backend && npm run dev",
     "frontend": "npx serve . --listen 3000",
