@@ -104,6 +104,13 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (body.availability && Array.isArray(body.availability)) {
     body.periods = [...new Set(body.availability.map((a) => a.period))];
   }
+  if (body.stage) {
+    const { data: current } = await supabase.from('candidates').select('stage').eq('id', id).single();
+    if (current && current.stage !== body.stage) {
+      body.stage_since = new Date();
+      body.stage_reminder_sent_at = null;
+    }
+  }
   const { data, error } = await supabase
     .from('candidates')
     .update({ ...body, updated_at: new Date() })
