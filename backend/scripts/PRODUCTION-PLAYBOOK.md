@@ -51,6 +51,15 @@ Guardrails iniciais de custo e capacidade:
 - Testes partilhados, quando necessários: projeto Supabase Free separado de
   produção.
 
+- Pedir à associação, antes de configurar o domínio:
+  - o nome exato do domínio;
+  - onde o DNS é gerido e quem tem acesso de administrador;
+  - se já existe um site no domínio principal ou em `www`;
+  - aprovação para usar um subdomínio, preferencialmente
+    `app.<dominio-da-associacao>`;
+  - quem administra o Google Workspace;
+  - qual será o remetente dos emails de autenticação, por exemplo
+    `noreply@<dominio-da-associacao>`.
 - Garantir que Railway e Supabase de produção estão separados de
   desenvolvimento/testes.
 - Confirmar a URL pública canónica da aplicação.
@@ -129,6 +138,31 @@ No projeto Supabase:
   aprovados;
 - não expor a `service_role` no frontend, logs ou respostas HTTP.
 
+### Google Workspace e emails de autenticação
+
+O domínio da aplicação e o serviço de email são configurações independentes.
+Ter Google Workspace não configura automaticamente o SMTP do Supabase.
+
+- Pedir ao administrador do Workspace que confirme o método autorizado para a
+  aplicação. O Google recomenda o SMTP Relay para aplicações, mas a associação
+  tem de validar as políticas, autenticação e quotas da sua conta.
+- Preferir um remetente técnico estável, como
+  `noreply@<dominio-da-associacao>`, em vez da password pessoal de alguém.
+- Configurar em Supabase **Authentication > Emails > SMTP Settings** o host,
+  porta, utilizador, credencial e remetente aprovados.
+- Testar convite, confirmação e recuperação para pelo menos dois fornecedores
+  de email e verificar também a pasta de spam.
+- Não alterar registos MX, SPF, DKIM ou DMARC sem o administrador do Workspace.
+  Se forem necessárias alterações, rever primeiro os registos existentes: não
+  criar um segundo registo SPF para o mesmo hostname.
+- Confirmar que as ligações dos emails usam o domínio canónico da aplicação e
+  que o tracking de links do fornecedor não as modifica.
+
+Referências:
+
+- [SMTP personalizado no Supabase](https://supabase.com/docs/guides/auth/auth-smtp)
+- [Opções SMTP para aplicações no Google Workspace](https://support.google.com/a/answer/176600)
+
 Se o assistente ainda não estiver aprovado ou configurado, usar
 `AI_ENABLED=false`. Esta opção não deve impedir o funcionamento das restantes
 áreas da aplicação.
@@ -159,11 +193,59 @@ Não avançar para o deploy enquanto:
 
 ## 6. Deploy
 
+### Associar o domínio
+
+Usar preferencialmente `app.<dominio-da-associacao>`. Um subdomínio não exige
+comprar outro domínio nem criar uma caixa de correio: passa a existir quando o
+respetivo registo é criado no DNS. Esta escolha mantém o site atual e o Google
+Workspace separados da aplicação.
+
+1. Fazer primeiro o deploy usando o endereço temporário `*.up.railway.app`.
+2. No serviço Railway, abrir **Settings > Public Networking > Custom Domain** e
+   introduzir `app.<dominio-da-associacao>`.
+3. Copiar do Railway os registos CNAME e TXT apresentados. Não inventar nem
+   reutilizar valores de outro ambiente.
+4. No fornecedor que gere o DNS, confirmar que o nome `app` ainda não tem um
+   registo A, AAAA ou CNAME. Se já tiver, parar e esclarecer a sua utilização.
+5. Criar os registos CNAME e TXT exatamente como apresentados pelo Railway.
+   O TXT é necessário para provar a propriedade do domínio.
+6. Não alterar os registos do domínio principal, `www`, MX, SPF, DKIM ou DMARC.
+   Os MX do Google Workspace e o CNAME de `app` podem coexistir.
+7. Esperar pela validação do domínio e pela emissão automática do certificado
+   HTTPS no Railway. A propagação DNS pode demorar.
+8. Confirmar que `https://app.<dominio-da-associacao>` abre a aplicação e que
+   HTTP redireciona para HTTPS.
+
+Depois da validação, usar o mesmo hostname em toda a configuração:
+
+```text
+PUBLIC_APP_URL=https://app.<dominio-da-associacao>
+COORDINATOR_INVITE_REDIRECT_URL=https://app.<dominio-da-associacao>/nova-palavra-passe?tipo=convite-coordenacao
+TURNSTILE_EXPECTED_HOSTNAMES=app.<dominio-da-associacao>
+```
+
+No Supabase:
+
+- definir **Site URL** como `https://app.<dominio-da-associacao>`;
+- adicionar os caminhos exatos de convite e recuperação aos Redirect URLs;
+- evitar wildcards nas URLs de produção.
+
+No Turnstile:
+
+- autorizar `app.<dominio-da-associacao>` sem `https://`, porta ou caminho;
+- não autorizar `localhost` no widget de produção.
+
+Referências:
+
+- [Domínios personalizados no Railway](https://docs.railway.com/networking/domains/working-with-domains)
+- [Redirect URLs no Supabase](https://supabase.com/docs/guides/auth/redirect-urls)
+- [Hostnames autorizados no Turnstile](https://developers.cloudflare.com/turnstile/additional-configuration/hostname-management/)
+
+### Publicar e validar
+
 - Fazer deploy do backend e frontend a partir do mesmo estado de código.
 - Ligar o Railway ao repositório privado da organização GitHub da associação e
   limitar quem pode alterar deploys e segredos.
-- Associar o domínio existente e validar DNS, HTTPS e redirecionamento para a
-  URL canónica.
 - Confirmar que o Railway não está a usar valores do ficheiro de exemplo.
 - Verificar nos logs que não existem erros de configuração, migrations ou SMTP.
 - Confirmar que a página `/nova-palavra-passe` está acessível antes de enviar o
