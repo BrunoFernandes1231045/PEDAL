@@ -1,13 +1,15 @@
-# PED-57 a PED-61 — checklist do primeiro ambiente de produção
+# Playbook de colocação em produção
 
 Esta checklist separa o que está versionado no repositório do que tem de ser
-feito ao criar o primeiro ambiente de produção. Não assume que já existe uma
-aplicação em produção nem que o projeto Supabase atual será reutilizado.
+feito ao criar ou atualizar um ambiente de produção. Deve acompanhar todas as
+entregas futuras e ser atualizada quando a arquitetura, os fornecedores ou os
+controlos operacionais mudarem. Não assume que já existe uma aplicação em
+produção nem que um projeto Supabase anterior será reutilizado.
 
-## 1. Decidir a arquitetura do primeiro ambiente
+## 1. Definir o ambiente e a estratégia de dados
 
-- Criar um projeto Railway de produção e um projeto Supabase de produção
-  separados de desenvolvimento/testes.
+- Garantir que Railway e Supabase de produção estão separados de
+  desenvolvimento/testes.
 - Confirmar a URL pública canónica da aplicação.
 - Decidir se os dados do Supabase atual serão migrados ou se o ambiente começa
   vazio.
@@ -21,8 +23,8 @@ aplicação em produção nem que o projeto Supabase atual será reutilizado.
 
 ## 2. Cloudflare Turnstile
 
-1. Criar uma conta Cloudflare da associação.
-2. Criar um widget Turnstile do tipo **Managed**.
+1. Confirmar a conta Cloudflare da associação; criá-la no primeiro ambiente.
+2. Criar ou reutilizar um widget Turnstile do tipo **Managed**.
 3. Autorizar apenas os hostnames reais da aplicação.
 4. Guardar a site key e a secret key no gestor de segredos do Railway.
 5. Nunca usar em produção as chaves oficiais de teste `1x000...`.
@@ -43,9 +45,9 @@ O plano gratuito do Turnstile é suficiente para este caso. A conta externa
 continua a ser necessária porque é nela que se criam e rodam as chaves e se
 limitam os hostnames.
 
-## 3. Criar e configurar o Supabase de produção
+## 3. Configurar o Supabase de produção
 
-Criar o projeto Supabase de produção e configurar no Railway:
+Criar ou selecionar o projeto Supabase de produção e configurar no Railway:
 
 ```text
 NODE_ENV=production
@@ -59,7 +61,7 @@ COORDINATOR_MFA_REQUIRED=true
 PASSWORD_RECOVERY_EMAIL_ENABLED=true
 ```
 
-No novo projeto Supabase:
+No projeto Supabase:
 
 - confirmar que backend e frontend apontam para este mesmo projeto;
 - garantir que `SUPABASE_PUBLIC_URL` e `SUPABASE_URL` são exatamente iguais
@@ -77,19 +79,19 @@ No novo projeto Supabase:
 - confirmar que TOTP MFA está ativo;
 - não expor a `service_role` no frontend, logs ou respostas HTTP.
 
-## 4. Criar o schema
+## 4. Aplicar migrations
 
-Num projeto Supabase vazio, aplicar **todas** as migrations por ordem, de
-`001_initial_schema.sql` até `018_migrate_auth_roles.sql`.
+Num projeto Supabase vazio, aplicar **todos** os ficheiros existentes em
+`backend/supabase/migrations/` pela ordem numérica dos nomes.
 
-Se, em alternativa, for reutilizado um projeto que já tenha as migrations
-`001`–`016`, aplicar apenas:
+Num projeto existente, consultar o histórico de migrations e aplicar, pela mesma
+ordem, todos os ficheiros ainda pendentes. Não assumir no playbook qual é a
+última migration: confirmar sempre o conteúdo atual da pasta no momento da
+entrega.
 
-1. `017_signup_abuse_controls.sql`;
-2. `018_migrate_auth_roles.sql`.
-
-Num projeto vazio, a migration 018 não encontra contas antigas para migrar.
-Num projeto reutilizado, seguir imediatamente
+Quando `018_migrate_auth_roles.sql` estiver entre as migrations pendentes, um
+projeto vazio não terá contas antigas para migrar. Num projeto reutilizado,
+seguir imediatamente
 `backend/scripts/PED-61-roles-runbook.md`: rever as contas ambíguas, inserir
 apenas UUIDs confirmados na allowlist e repetir
 `private.apply_ped61_auth_role_migration()`.
@@ -101,13 +103,13 @@ Não avançar para o deploy enquanto:
 - a lista final de coordenadores importados em `app_metadata` não tiver sido
   confirmada.
 
-## 5. Primeiro deploy
+## 5. Deploy
 
 - Fazer deploy do backend e frontend a partir do mesmo estado de código.
 - Confirmar que o Railway não está a usar valores do ficheiro de exemplo.
 - Verificar nos logs que não existem erros de configuração, migrations ou SMTP.
 - Confirmar que a página `/nova-palavra-passe` está acessível antes de enviar o
-  primeiro convite.
+  convite inicial ou qualquer novo convite.
 - Não reverter para uma versão que volte a autorizar através de
   `user_metadata`; se surgir um problema, desativar temporariamente o registo e
   corrigir para a frente.
@@ -115,7 +117,7 @@ Não avançar para o deploy enquanto:
 Para fechar temporariamente o registo sem reabrir a falha, remover/desativar a
 configuração Turnstile. O endpoint fica indisponível em modo fail-closed.
 
-## 6. Criar o primeiro administrador
+## 6. Garantir uma conta de administração
 
 Num ambiente vazio existe um problema circular: só um administrador pode
 convidar outros coordenadores. Criar o primeiro administrador através do script
@@ -195,7 +197,7 @@ de Gestão da aplicação.
   nenhum recurso.
 - Os fluxos legítimos continuam a funcionar apenas através do backend.
 
-## 8. Evidência para fechar os issues
+## 8. Evidência da entrega
 
 Guardar, sem dados pessoais ou segredos:
 

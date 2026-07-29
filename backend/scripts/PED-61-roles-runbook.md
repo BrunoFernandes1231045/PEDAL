@@ -96,7 +96,7 @@ Configuração necessária para PED-59:
 - confirmar que o fator TOTP está permitido no projeto Supabase.
 
 Num projeto vazio, criar a primeira administração com o bootstrap documentado
-na secção 5 de `backend/scripts/SECURITY-DEPLOYMENT-CHECKLIST.md`. A partir da
+na secção 6 de `backend/scripts/PRODUCTION-PLAYBOOK.md`. A partir da
 pasta `backend`, com as variáveis do projeto já carregadas:
 
 ```bash
