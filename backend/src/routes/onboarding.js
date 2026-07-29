@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const supabase = require('../db/supabase');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, attachOwnCandidateId } = require('../middleware/auth');
 
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, attachOwnCandidateId, async (req, res) => {
   const { id } = req.params;
-  if (req.user.role !== 'coordinator' && req.user.id !== id) {
+  if (req.user.role !== 'coordinator' && req.ownCandidateId !== id) {
     return res.status(403).json({ error: 'Proibido' });
   }
   const { data, error } = await supabase
@@ -14,9 +14,9 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(data);
 });
 
-router.patch('/progress/:moduleId', requireAuth, async (req, res) => {
+router.patch('/progress/:moduleId', requireAuth, attachOwnCandidateId, async (req, res) => {
   const { id, moduleId } = req.params;
-  if (req.user.role !== 'coordinator' && req.user.id !== id) {
+  if (req.user.role !== 'coordinator' && req.ownCandidateId !== id) {
     return res.status(403).json({ error: 'Proibido' });
   }
   const { completed } = req.body;
@@ -30,8 +30,11 @@ router.patch('/progress/:moduleId', requireAuth, async (req, res) => {
   res.json(data);
 });
 
-router.patch('/', requireAuth, async (req, res) => {
+router.patch('/', requireAuth, attachOwnCandidateId, async (req, res) => {
   const { id } = req.params;
+  if (req.user.role !== 'coordinator' && req.ownCandidateId !== id) {
+    return res.status(403).json({ error: 'Proibido' });
+  }
   const { data, error } = await supabase
     .from('onboarding')
     .upsert({ candidate_id: id, ...req.body, updated_at: new Date() })

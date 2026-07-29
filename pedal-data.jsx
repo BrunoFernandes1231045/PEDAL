@@ -337,12 +337,4 @@ PEDAL.matchIn = function (list, text) {
   return bestScore >= PEDAL.MIN_FAQ_CONFIDENCE ? best : null; // s\u00f3 1, exige ser suficientemente espec\u00edfica
 };
 
-// Gera uma palavra-passe inicial legível (enviada por email após a inscrição)
-PEDAL.genPassword = function () {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const nums = '23456789';
-  const pick = (s, n) => Array.from({ length: n }, () => s[Math.floor(Math.random() * s.length)]).join('');
-  return 'PSI-' + pick(chars, 3) + pick(nums, 3);
-};
-
 window.PEDAL = PEDAL;

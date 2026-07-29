@@ -13,11 +13,10 @@ const ROLE_DISPLAY = {
   coordenacao: 'Coordenação',
 };
 
+// Entropia real (crypto), não um dicionário de ~4500 combinações (PED-59).
+const crypto = require('crypto');
 function genPassword() {
-  const words = ['pedal', 'bici', 'porto', 'piloto', 'rota', 'vento'];
-  const word = words[Math.floor(Math.random() * words.length)];
-  const num = Math.floor(Math.random() * 900) + 100;
-  return `${word}${num}`;
+  return crypto.randomBytes(18).toString('base64url');
 }
 
 // listUsers() só devolve 50 contas por página — com dezenas de candidatos
@@ -44,14 +43,14 @@ router.get('/', requireAuth, requireCoordinator, requireRole(['administracao']),
   catch (error) { return res.status(500).json({ error: error.message }); }
 
   const coordinators = allUsers
-    .filter((u) => u.user_metadata?.role === 'coordinator')
+    .filter((u) => u.app_metadata?.role === 'coordinator')
     .map((u) => ({
       id: u.id,
       name: u.user_metadata?.name || u.email,
       email: u.email,
       phone: u.user_metadata?.phone || '',
-      coordRole: u.user_metadata?.coord_role || 'coordenacao',
-      role: ROLE_DISPLAY[u.user_metadata?.coord_role] || 'Coordenação',
+      coordRole: u.app_metadata?.coord_role || 'coordenacao',
+      role: ROLE_DISPLAY[u.app_metadata?.coord_role] || 'Coordenação',
       createdAt: u.created_at?.slice(0, 10) || '',
     }));
 
@@ -69,7 +68,8 @@ router.post('/', requireAuth, requireCoordinator, requireRole(['administracao'])
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password: tempPassword,
-    user_metadata: { role: 'coordinator', coord_role: coordRole, name, phone: phone || '' },
+    user_metadata: { name, phone: phone || '' },
+    app_metadata: { role: 'coordinator', coord_role: coordRole },
     email_confirm: true,
   });
 
@@ -96,7 +96,7 @@ router.patch('/:email', requireAuth, requireCoordinator, requireRole(['administr
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   const { error } = await supabase.auth.admin.updateUserById(user.id, {
-    user_metadata: { ...user.user_metadata, coord_role: coordRole },
+    app_metadata: { ...user.app_metadata, coord_role: coordRole },
   });
 
   if (error) return res.status(500).json({ error: error.message });

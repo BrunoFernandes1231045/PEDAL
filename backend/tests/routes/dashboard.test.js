@@ -5,6 +5,8 @@ jest.mock('../../src/db/supabase', () => {
 jest.mock('../../src/middleware/auth', () => ({
   requireAuth: (req, res, next) => { req.user = { id: 'coord-1', role: 'coordinator' }; next(); },
   requireCoordinator: (req, res, next) => next(),
+  requireRole: () => (req, res, next) => next(),
+  attachOwnCandidateId: (req, res, next) => { req.ownCandidateId = req.user.role === 'coordinator' ? null : req.user.id; next(); },
 }));
 
 const request = require('supertest');

@@ -4,17 +4,35 @@ const supabase = require('../db/supabase');
 const { requireAuth, requireCoordinator, requireRole } = require('../middleware/auth');
 const { notifyScheduleChange } = require('../lib/scheduleEmails');
 
+// Gera password com entropia real (crypto), não a partir de um dicionário
+// pequeno — usada tanto para candidatos como para contas de coordenação.
+const crypto = require('crypto');
 function genPassword() {
-  const words = ['pedal', 'bici', 'porto', 'piloto', 'rota'];
-  const word = words[Math.floor(Math.random() * words.length)];
-  const num = Math.floor(Math.random() * 900) + 100;
-  return `${word}${num}`;
+  return crypto.randomBytes(18).toString('base64url'); // ~24 carateres, ~144 bits
+}
+
+// Limite persistente (em memória, sobrevive a pedidos mas não a reinícios do
+// processo) contra registo automatizado em massa — PED-57. Por IP e por
+// email, para não deixar nem um IP nem um endereço abusarem do endpoint.
+const SIGNUP_LIMIT = 5;
+const SIGNUP_WINDOW_MS = 60 * 60 * 1000; // 1 hora
+const signupHits = new Map(); // chave (ip ou email) -> { count, resetAt }
+function signupLimited(key) {
+  const now = Date.now();
+  const entry = signupHits.get(key);
+  if (!entry || now > entry.resetAt) { signupHits.set(key, { count: 1, resetAt: now + SIGNUP_WINDOW_MS }); return false; }
+  entry.count += 1;
+  return entry.count > SIGNUP_LIMIT;
 }
 
 // POST /api/candidates — público (inscrição)
 router.post('/', async (req, res) => {
-  const { name, email, dob, phone, cc, profissao, nif, rua, porta, codigo_postal, cidade, password: providedPassword } = req.body;
+  const { name, email, dob, phone, cc, profissao, nif, rua, porta, codigo_postal, cidade } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name e email são obrigatórios' });
+
+  if (signupLimited(req.ip) || signupLimited(String(email).toLowerCase())) {
+    return res.status(429).json({ error: 'Demasiados pedidos. Tenta de novo dentro de uma hora.' });
+  }
 
   if (dob) {
     if (new Date(dob) > new Date()) return res.status(400).json({ error: 'A data de nascimento não pode ser uma data futura.' });
@@ -22,14 +40,15 @@ router.post('/', async (req, res) => {
     if (age < 18) return res.status(400).json({ error: 'É preciso ter pelo menos 18 anos para te inscreveres.' });
   }
 
-  const initialPassword = providedPassword || genPassword();
+  // A password nunca vem do cliente — só o servidor a gera (PED-57).
+  const initialPassword = genPassword();
 
   const emailVerification = process.env.EMAIL_VERIFICATION === 'true';
 
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
     password: initialPassword,
-    user_metadata: { role: 'candidate' },
+    app_metadata: { role: 'candidate' },
     email_confirm: !emailVerification,
   });
   if (authError) { console.error('[candidates] auth error:', authError.message); return res.status(500).json({ error: authError.message }); }
@@ -40,7 +59,12 @@ router.post('/', async (req, res) => {
     .select()
     .single();
 
-  if (error) { console.error('[candidates] insert error:', error.message, error.details); return res.status(500).json({ error: error.message }); }
+  if (error) {
+    console.error('[candidates] insert error:', error.message, error.details);
+    // Compensa a conta Auth já criada para não deixar utilizadores órfãos sem perfil.
+    await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {});
+    return res.status(500).json({ error: error.message });
+  }
   res.status(201).json({ ...data, initialPassword, emailVerificationRequired: emailVerification });
 });
 
@@ -81,6 +105,9 @@ router.patch('/:id/formalize', requireAuth, async (req, res) => {
   const { signature } = req.body;
   if (!signature) return res.status(400).json({ error: 'signature é obrigatória' });
 
+  const { data: own } = await supabase.from('candidates').select('user_id').eq('id', req.params.id).single();
+  if (!own || own.user_id !== req.user.id) return res.status(403).json({ error: 'Proibido' });
+
   const { data, error } = await supabase
     .from('candidates')
     .update({ signature, stage: 'ativo', updated_at: new Date() })
@@ -90,6 +117,14 @@ router.patch('/:id/formalize', requireAuth, async (req, res) => {
   res.json(data);
 });
 
+// Campos que o próprio candidato pode escrever no seu registo — tudo o resto
+// (incluindo stage fora do funil de auto-serviço) é ignorado para evitar
+// mass assignment (PED-58). `stage` só pode entrar nos valores que o próprio
+// candidato avança sozinho; onboarding/formalização/prática/ativo/rejeitado
+// só a coordenação pode definir.
+const CANDIDATE_WRITABLE_FIELDS = ['chat_messages', 'chat_node', 'scheduling', 'interview', 'periods', 'availability', 'locality'];
+const CANDIDATE_SELF_STAGES = ['inscricao', 'apresentacao', 'triagem', 'entrevista', 'validacao', 'espera'];
+
 // PATCH /api/candidates/:id — próprio ou coordinator (alteração de stage só para coordenacao)
 router.patch('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
@@ -97,10 +132,21 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const { data: own } = await supabase.from('candidates').select('user_id').eq('id', id).single();
     if (!own || own.user_id !== req.user.id) return res.status(403).json({ error: 'Proibido' });
   }
-  const body = { ...req.body };
-  if (body.stage && req.user.role === 'coordinator' && !['administracao', 'coordenacao'].includes(req.user.coord_role)) {
-    return res.status(403).json({ error: 'Sem permissão para alterar o estado de candidatos' });
+
+  let body;
+  if (req.user.role === 'coordinator') {
+    body = { ...req.body };
+    if (body.stage && !['administracao', 'coordenacao'].includes(req.user.coord_role)) {
+      return res.status(403).json({ error: 'Sem permissão para alterar o estado de candidatos' });
+    }
+  } else {
+    // Allowlist estrita — ignora silenciosamente qualquer campo administrativo
+    // que o cliente tente enviar (stage, dados de outro candidato, etc.).
+    body = {};
+    for (const key of CANDIDATE_WRITABLE_FIELDS) if (key in req.body) body[key] = req.body[key];
+    if (req.body.stage && CANDIDATE_SELF_STAGES.includes(req.body.stage)) body.stage = req.body.stage;
   }
+
   if (body.availability && Array.isArray(body.availability)) {
     body.periods = [...new Set(body.availability.map((a) => a.period))];
   }

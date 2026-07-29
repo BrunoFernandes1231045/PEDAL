@@ -15,6 +15,8 @@ jest.mock('../../src/middleware/auth', () => ({
     next();
   },
   requireCoordinator: (req, res, next) => next(),
+  requireRole: () => (req, res, next) => next(),
+  attachOwnCandidateId: (req, res, next) => { req.ownCandidateId = mockUser.role === 'coordinator' ? null : mockUser.id; next(); },
 }));
 
 const request = require('supertest');

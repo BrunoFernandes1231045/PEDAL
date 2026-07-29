@@ -34,7 +34,7 @@ describe('requireAuth', () => {
 
   it('sets req.user and calls next when token is valid', async () => {
     supabase.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'user-123', user_metadata: { role: 'candidate' } } },
+      data: { user: { id: 'user-123', app_metadata: { role: 'candidate' } } },
       error: null,
     });
     const req = { headers: { authorization: 'Bearer valid-token' } };
@@ -42,7 +42,21 @@ describe('requireAuth', () => {
     const next = jest.fn();
     await requireAuth(req, res, next);
     expect(next).toHaveBeenCalled();
-    expect(req.user).toEqual({ id: 'user-123', role: 'candidate' });
+    expect(req.user).toEqual({ id: 'user-123', role: 'candidate', coord_role: 'coordenacao' });
+  });
+
+  // PED-61: user_metadata é editável pelo próprio utilizador via
+  // supabase.auth.updateUser() — nunca pode decidir permissões.
+  it('ignores role/coord_role vindos de user_metadata (PED-61)', async () => {
+    supabase.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'user-123', user_metadata: { role: 'coordinator', coord_role: 'administracao' }, app_metadata: {} } },
+      error: null,
+    });
+    const req = { headers: { authorization: 'Bearer valid-token' } };
+    const res = mockRes();
+    const next = jest.fn();
+    await requireAuth(req, res, next);
+    expect(req.user).toEqual({ id: 'user-123', role: 'candidate', coord_role: 'coordenacao' });
   });
 });
 

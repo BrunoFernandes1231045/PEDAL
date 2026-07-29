@@ -42,10 +42,11 @@ function waitForRecoverySession(onValid) {
 
 // Candidatos e coordenadores partilham este fluxo mas têm apps/páginas de login
 // separadas (PEDAL.html vs coordenacao.html). A sessão de recuperação já diz o
-// papel do utilizador (user_metadata.role), por isso o regresso ao login acerta
-// a página certa em vez de assumir sempre "candidato".
+// papel do utilizador (app_metadata.role — não user_metadata, que é editável
+// pelo próprio utilizador e não serve para decisões de acesso, PED-61), por
+// isso o regresso ao login acerta a página certa em vez de assumir "candidato".
 function getLoginUrl() {
-  const role = recoverySession && recoverySession.user && recoverySession.user.user_metadata && recoverySession.user.user_metadata.role;
+  const role = recoverySession && recoverySession.user && recoverySession.user.app_metadata && recoverySession.user.app_metadata.role;
   return role === 'coordinator' ? '/coordenacao.html' : '/PEDAL.html';
 }
 

@@ -543,7 +543,7 @@ function ChatView({ store, tone = 'caloroso' }) {
               <div className="pedal-credhint" style={{ marginTop: 11 }}>
                 <span style={{ font: '700 10px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>Enviado por email</span>
                 <div className="pedal-credrow"><span>Email</span><strong>{acc.email}</strong></div>
-                <div className="pedal-credrow"><span>Palavra-passe</span><strong>{acc.password}</strong></div>
+                {S.pendingPassword && <div className="pedal-credrow"><span>Palavra-passe</span><strong>{S.pendingPassword}</strong></div>}
               </div>
             </div>
           </div>
@@ -608,11 +608,12 @@ function ChatView({ store, tone = 'caloroso' }) {
     if (it.type === 'card:consent') return <ConsentCard onAccept={() => { addMessage({ from: 'system', text: 'Consentimento de dados aceite (RGPD)' }); enterNode('gdpr_consent'); }} onMore={() => say([{ text: 'Os teus dados ficam acessíveis apenas à coordenação da Pedalar Sem Idade, são usados só para o processo de voluntariado e podes pedir para os eliminar a qualquer momento. 🔒' }], () => setInteraction(interactionFor('consent')))} />;
     if (it.type === 'form_profile') return <ProfileForm onSubmit={(d) => {
       patchCandidate(d);
-      const pw = store.createAccount(d.email);
+      store.createAccount(d.email);
       store.setSession(true);
       addMessage({ from: 'user', text: `${d.name} · ${d.contact}` });
-      addMessage({ from: 'system', text: 'Inscrição criada · credenciais enviadas por email' });
-      addMessage({ from: 'agent', id: uidC(), card: 'credentials' });
+      addMessage({ from: 'system', text: 'Inscrição criada · a preparar a tua conta…' });
+      // O cartão de credenciais só é adicionado quando o servidor confirma a
+      // criação da conta e devolve a password gerada por ele (ver pedal-app.jsx).
       enterNode('triage');
     }} />;
     if (it.type === 'triage') return <TriageForm localities={allLocalities} initial={S.candidate.availability} onSubmit={(d) => {

@@ -24,9 +24,11 @@ function AuthGate({ store }) {
       if (!res.ok) { setErr(data.error_description || 'Email ou palavra-passe incorretos.'); return; }
 
       const jwt = data.access_token;
-      const meta = (data.user && data.user.user_metadata) || {};
+      // role/coord_role vêm de app_metadata — user_metadata é editável pelo
+      // próprio utilizador e não serve para decisões de acesso (PED-61).
+      const appMeta = (data.user && data.user.app_metadata) || {};
 
-      if (meta.role === 'coordinator') {
+      if (appMeta.role === 'coordinator') {
         window.location.href = 'coordenacao.html';
         return;
       }
@@ -148,8 +150,11 @@ function LoginPanel({ store }) {
 
       const jwt = data.access_token;
       const meta = (data.user && data.user.user_metadata) || {};
-      const role = meta.role;
-      const coordRole = meta.coord_role || 'coordenacao';
+      // role/coord_role vêm de app_metadata — user_metadata é editável pelo
+      // próprio utilizador e não serve para decisões de acesso (PED-61).
+      const appMeta = (data.user && data.user.app_metadata) || {};
+      const role = appMeta.role;
+      const coordRole = appMeta.coord_role || 'coordenacao';
 
       if (role === 'coordinator') {
         if (window.__PEDAL_MODE === 'coord') {
@@ -265,13 +270,13 @@ function LoginPanel({ store }) {
           </div>
           {hasAccount ? (
             <div style={{ marginTop: 12 }}>
-              <button className="pedal-authlink" onClick={() => setHint((h) => !h)}>{hint ? 'Ocultar credenciais' : 'Esqueci-me dos dados de acesso'}</button>
+              <button className="pedal-authlink" onClick={() => setHint((h) => !h)}>{hint ? 'Ocultar' : 'Esqueci-me dos dados de acesso'}</button>
               {hint && (
                 <div className="pedal-credhint">
-                  <span style={{ font: '700 10.5px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>Credenciais · enviadas por email</span>
+                  <span style={{ font: '700 10.5px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>O teu email</span>
                   <div className="pedal-credrow"><span>Email</span><strong>{S.account.email}</strong></div>
-                  <div className="pedal-credrow"><span>Palavra-passe</span><strong>{S.account.password}</strong></div>
-                  <button className="pedal-btn ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => { setEmail(S.account.email); setPw(S.account.password); }}>Preencher automaticamente</button>
+                  <button className="pedal-btn ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => setEmail(S.account.email)}>Preencher email</button>
+                  <p style={{ font: '400 11.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '10px 0 0' }}>Não guardamos a tua palavra-passe — usa <a href="/recuperar-palavra-passe" className="pedal-authlink" style={{ display: 'inline' }}>recuperar palavra-passe</a> para a repor.</p>
                 </div>
               )}
             </div>
@@ -311,10 +316,26 @@ function ProfileView({ store }) {
     if (form.email.trim() && form.email.trim() !== acc.email) store.up({ account: { ...acc, email: form.email.trim() } });
     setEditing(false);
   };
-  const savePw = () => {
-    if (pw1.length < 4) { setPwMsg('A palavra-passe deve ter pelo menos 4 caracteres.'); return; }
+  // Muda a password mesmo no Supabase (PED-59) — a versão anterior só
+  // mudava o estado local, por isso a password antiga continuava válida.
+  const [pwSaving, setPwSaving] = useStateAu(false);
+  const savePw = async () => {
+    if (pw1.length < 8) { setPwMsg('A palavra-passe deve ter pelo menos 8 caracteres.'); return; }
     if (pw1 !== pw2) { setPwMsg('As palavras-passe não coincidem.'); return; }
-    store.changePassword(pw1); setPw1(''); setPw2(''); setPwMsg(''); setPwOpen(false);
+    setPwSaving(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${store.candidateJwt}` },
+        body: JSON.stringify({ password: pw1 }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setPwMsg(d.error_description || d.msg || 'Não foi possível mudar a palavra-passe.'); return; }
+      setPw1(''); setPw2(''); setPwMsg(''); setPwOpen(false);
+    } catch (_) {
+      setPwMsg('Erro de ligação ao servidor.');
+    } finally {
+      setPwSaving(false);
+    }
   };
 
   const locName = (c.localities && c.localities.length ? c.localities : [c.locality]).map((id) => (P.LOCALITIES.find((l) => l.id === id) || {}).name).filter(Boolean).join(', ') || '—';
@@ -375,12 +396,12 @@ function ProfileView({ store }) {
             <div className="pedal-proflist"><ProfRow label="Palavra-passe" value="••••••••" last /></div>
           ) : (
             <div style={{ padding: '4px 2px' }}>
-              <Field label="Nova palavra-passe"><input className="pedal-input" type="password" value={pw1} onChange={(e) => setPw1(e.target.value)} placeholder="Mínimo 4 caracteres" /></Field>
+              <Field label="Nova palavra-passe"><input className="pedal-input" type="password" value={pw1} onChange={(e) => setPw1(e.target.value)} placeholder="Mínimo 8 caracteres" /></Field>
               <Field label="Confirmar palavra-passe"><input className="pedal-input" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Repete a nova palavra-passe" /></Field>
               {pwMsg && <div className="pedal-autherr"><Icon name="shield" size={14} />{pwMsg}</div>}
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => { setPwOpen(false); setPw1(''); setPw2(''); setPwMsg(''); }}>Cancelar</button>
-                <button className="pedal-btn primary" style={{ flex: 1 }} onClick={savePw}>Guardar</button>
+                <button className="pedal-btn ghost" style={{ flex: 1 }} onClick={() => { setPwOpen(false); setPw1(''); setPw2(''); setPwMsg(''); }} disabled={pwSaving}>Cancelar</button>
+                <button className="pedal-btn primary" style={{ flex: 1, opacity: pwSaving ? 0.6 : 1 }} onClick={savePw} disabled={pwSaving}>{pwSaving ? 'A guardar…' : 'Guardar'}</button>
               </div>
             </div>
           )}
@@ -444,8 +465,11 @@ function CoordLoginScreen({ store }) {
       const data = await res.json();
       if (!res.ok) { setErr(data.error_description || 'Credenciais inválidas'); return; }
       const meta = data.user?.user_metadata || {};
-      if (meta.role !== 'coordinator') { setErr('Esta conta não tem acesso à coordenação'); return; }
-      const coordRole = meta.coord_role || 'coordenacao';
+      // role/coord_role vêm de app_metadata — user_metadata é editável pelo
+      // próprio utilizador e não serve para decisões de acesso (PED-61).
+      const appMeta = data.user?.app_metadata || {};
+      if (appMeta.role !== 'coordinator') { setErr('Esta conta não tem acesso à coordenação'); return; }
+      const coordRole = appMeta.coord_role || 'coordenacao';
       const ROLE_DISPLAY = { administracao: 'Administração', coordenacao: 'Coordenação' };
       const roleValues = Object.values(ROLE_DISPLAY);
       const displayName = (meta.name && !roleValues.includes(meta.name)) ? meta.name : email.split('@')[0];

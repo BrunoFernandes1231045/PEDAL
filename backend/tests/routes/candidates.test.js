@@ -11,6 +11,8 @@ jest.mock('../../src/db/supabase', () => {
 jest.mock('../../src/middleware/auth', () => ({
   requireAuth: (req, res, next) => { req.user = { id: 'cand-1', role: 'candidate' }; next(); },
   requireCoordinator: (req, res, next) => next(),
+  requireRole: () => (req, res, next) => next(),
+  attachOwnCandidateId: (req, res, next) => { req.ownCandidateId = req.user.role === 'coordinator' ? null : req.user.id; next(); },
 }));
 
 const request = require('supertest');
@@ -66,22 +68,35 @@ describe('GET /api/candidates', () => {
 
 describe('GET /api/candidates/:id', () => {
   it('returns candidate data', async () => {
-    supabase.from().single.mockResolvedValue({
-      data: { id: 'cand-1', name: 'Maria', stage: 'triagem' }, error: null,
-    });
+    // A 1ª chamada a single() é a verificação de dono (PED-58) — a 2ª é a
+    // leitura em si; user_id tem de bater com req.user.id ('cand-1').
+    supabase.from().single
+      .mockResolvedValueOnce({ data: { user_id: 'cand-1' }, error: null })
+      .mockResolvedValueOnce({ data: { id: 'cand-1', name: 'Maria', stage: 'triagem' }, error: null });
     const res = await request(app)
       .get('/api/candidates/cand-1')
       .set('Authorization', 'Bearer valid-token');
     expect(res.status).toBe(200);
     expect(res.body.name).toBe('Maria');
   });
+
+  it('returns 403 for another candidate\'s record (PED-58)', async () => {
+    supabase.from().single.mockResolvedValueOnce({ data: { user_id: 'cand-OUTRO' }, error: null });
+    const res = await request(app)
+      .get('/api/candidates/cand-1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(403);
+  });
 });
 
 describe('PATCH /api/candidates/:id', () => {
   it('updates candidate data', async () => {
-    supabase.from().single.mockResolvedValue({
-      data: { id: 'cand-1', stage: 'triagem' }, error: null,
-    });
+    // 1ª single(): verificação de dono. 2ª: leitura do stage atual (para
+    // stage_since). 3ª: resultado do update em si.
+    supabase.from().single
+      .mockResolvedValueOnce({ data: { user_id: 'cand-1' }, error: null })
+      .mockResolvedValueOnce({ data: { stage: 'inscricao' }, error: null })
+      .mockResolvedValueOnce({ data: { id: 'cand-1', stage: 'triagem' }, error: null });
     const res = await request(app)
       .patch('/api/candidates/cand-1')
       .set('Authorization', 'Bearer valid-token')
@@ -89,19 +104,41 @@ describe('PATCH /api/candidates/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body.stage).toBe('triagem');
   });
+
+  it('ignores stage values fora do funil de auto-serviço (PED-58 mass assignment)', async () => {
+    supabase.from().single
+      .mockResolvedValueOnce({ data: { user_id: 'cand-1' }, error: null })
+      .mockResolvedValueOnce({ data: { id: 'cand-1', stage: 'inscricao' }, error: null });
+    const res = await request(app)
+      .patch('/api/candidates/cand-1')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ stage: 'ativo' });
+    expect(res.status).toBe(200);
+    const chain = supabase.from();
+    expect(chain.update).toHaveBeenCalledWith(expect.not.objectContaining({ stage: 'ativo' }));
+  });
 });
 
 describe('PATCH /api/candidates/:id/formalize', () => {
   it('sets nif, signature and stage to ativo', async () => {
-    supabase.from().single.mockResolvedValue({
-      data: { id: 'cand-1', stage: 'ativo', nif: '123456789' }, error: null,
-    });
+    supabase.from().single
+      .mockResolvedValueOnce({ data: { user_id: 'cand-1' }, error: null })
+      .mockResolvedValueOnce({ data: { id: 'cand-1', stage: 'ativo', nif: '123456789' }, error: null });
     const res = await request(app)
       .patch('/api/candidates/cand-1/formalize')
       .set('Authorization', 'Bearer valid-token')
       .send({ nif: '123456789', signature: 'sig-base64' });
     expect(res.status).toBe(200);
     expect(res.body.stage).toBe('ativo');
+  });
+
+  it('returns 403 when trying to formalize another candidate (PED-58)', async () => {
+    supabase.from().single.mockResolvedValueOnce({ data: { user_id: 'cand-OUTRO' }, error: null });
+    const res = await request(app)
+      .patch('/api/candidates/cand-1/formalize')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ signature: 'sig-base64' });
+    expect(res.status).toBe(403);
   });
 
   it('returns 400 when nif or signature missing', async () => {

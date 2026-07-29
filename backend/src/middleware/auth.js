@@ -7,7 +7,10 @@ async function requireAuth(req, res, next) {
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return res.status(401).json({ error: 'Token inválido' });
 
-  req.user = { id: user.id, role: user.user_metadata?.role || 'candidate', coord_role: user.user_metadata?.coord_role || 'coordenacao' };
+  // role/coord_role vêm de app_metadata, não de user_metadata — só o backend
+  // (com a service_role key) consegue escrever em app_metadata; o próprio
+  // utilizador não o consegue alterar via supabase.auth.updateUser().
+  req.user = { id: user.id, role: user.app_metadata?.role || 'candidate', coord_role: user.app_metadata?.coord_role || 'coordenacao' };
   next();
 }
 
@@ -28,4 +31,17 @@ function requireRole(roles) {
   };
 }
 
-module.exports = { requireAuth, requireCoordinator, requireRole };
+// Resolve o candidate_id do próprio utilizador autenticado a partir da sessão
+// (candidates.user_id === req.user.id) — nunca a partir de um ID enviado pelo
+// cliente. Coordenadores não têm um "próprio candidato", por isso ficam com
+// req.ownCandidateId === null e continuam a ser tratados à parte nas rotas.
+// Corrige o IDOR de PED-58: comparar req.user.id (auth user) diretamente com
+// um candidate_id (chave da tabela candidates) nunca foi a comparação certa.
+async function attachOwnCandidateId(req, res, next) {
+  if (req.user.role === 'coordinator') { req.ownCandidateId = null; return next(); }
+  const { data } = await supabase.from('candidates').select('id').eq('user_id', req.user.id).maybeSingle();
+  req.ownCandidateId = data ? data.id : null;
+  next();
+}
+
+module.exports = { requireAuth, requireCoordinator, requireRole, attachOwnCandidateId };

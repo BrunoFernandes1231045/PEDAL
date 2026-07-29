@@ -37,7 +37,10 @@ function loadStore() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return { ...INITIAL };
     const p = JSON.parse(raw);
-    return { ...INITIAL, ...p, candidate: { ...INITIAL.candidate, ...(p.candidate || {}) }, onboarding: { ...INITIAL.onboarding, ...(p.onboarding || {}) }, chat: { ...INITIAL.chat, ...(p.chat || {}) }, scheduling: { ...(p.scheduling || {}) }, overrides: { ...(p.overrides || {}) }, trainers: p.trainers || INITIAL.trainers, contactRequests: p.contactRequests || INITIAL.contactRequests, session: { ...INITIAL.session, ...(p.session || {}) }, moduleContent: { ...(p.moduleContent || {}) }, stations: p.stations || INITIAL.stations, mgmtUsers: p.mgmtUsers || INITIAL.mgmtUsers, needs: p.needs || INITIAL.needs, coordProfile: { ...INITIAL.coordProfile, ...(p.coordProfile || {}) }, moduleConversations: { ...(p.moduleConversations || {}) } };
+    // Limpeza de credenciais persistidas por versões anteriores (PED-59) —
+    // nunca deve haver uma password em localStorage, só o refresh token.
+    const account = p.account && p.account.password ? { email: p.account.email, createdAt: p.account.createdAt } : p.account;
+    return { ...INITIAL, ...p, account, candidate: { ...INITIAL.candidate, ...(p.candidate || {}) }, onboarding: { ...INITIAL.onboarding, ...(p.onboarding || {}) }, chat: { ...INITIAL.chat, ...(p.chat || {}) }, scheduling: { ...(p.scheduling || {}) }, overrides: { ...(p.overrides || {}) }, trainers: p.trainers || INITIAL.trainers, contactRequests: p.contactRequests || INITIAL.contactRequests, session: { ...INITIAL.session, ...(p.session || {}) }, moduleContent: { ...(p.moduleContent || {}) }, stations: p.stations || INITIAL.stations, mgmtUsers: p.mgmtUsers || INITIAL.mgmtUsers, needs: p.needs || INITIAL.needs, coordProfile: { ...INITIAL.coordProfile, ...(p.coordProfile || {}) }, moduleConversations: { ...(p.moduleConversations || {}) } };
   } catch (e) { return { ...INITIAL }; }
 }
 
@@ -81,7 +84,13 @@ function App() {
   const nodeSyncTimer = useRefA();
   const chatLoadedFor = useRefA(null);
 
-  useEffectA(() => { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }, [S]);
+  useEffectA(() => {
+    // pendingPassword é só para o cartão "a tua conta está criada" mostrar a
+    // password uma única vez, na sessão em que é criada — nunca fica em
+    // localStorage (PED-59). Some sozinho ao recarregar a página.
+    const { pendingPassword, ...toPersist } = S;
+    localStorage.setItem(STORE_KEY, JSON.stringify(toPersist));
+  }, [S]);
 
   // Sincronização em tempo real entre separadores (candidato ↔ coordenação)
   useEffectA(() => {
@@ -203,26 +212,39 @@ function App() {
     return () => clearInterval(timer);
   }, [S.candidateId, candidateJwt]);
 
-  // Re-autentica na carga da página se já tem credenciais guardadas mas não tem JWT
+  // Re-autentica na carga da página com o refresh token guardado (nunca a
+  // password — PED-59: uma password nunca deve ficar persistida, o refresh
+  // token é revogável no servidor e é o mecanismo próprio do Supabase para isto).
   useEffectA(() => {
-    if (!S.account?.email || !S.account?.password || candidateJwt) return;
-    fetch('https://mamvckyoqrjhivffimob.supabase.co/auth/v1/token?grant_type=password', {
+    if (!S.account?.refreshToken || candidateJwt) return;
+    fetch('https://mamvckyoqrjhivffimob.supabase.co/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM' },
-      body: JSON.stringify({ email: S.account.email, password: S.account.password }),
+      body: JSON.stringify({ refresh_token: S.account.refreshToken }),
     })
       .then((r) => r.json())
-      .then((d) => { if (d.access_token) { console.log('[PEDAL] re-auth ok'); setCandidateJwtRaw(d.access_token); } else { console.log('[PEDAL] re-auth falhou:', d.error); } })
+      .then((d) => {
+        if (d.access_token) {
+          setCandidateJwtRaw(d.access_token);
+          if (d.refresh_token) setS((p) => ({ ...p, account: { ...p.account, refreshToken: d.refresh_token } }));
+        } else {
+          console.log('[PEDAL] re-auth falhou:', d.error);
+        }
+      })
       .catch(() => {});
   }, []); // só na montagem
 
-  // Quando o candidato se regista, cria-o também no backend (não-bloqueante)
+  // Quando o candidato se regista, cria-o também no backend (não-bloqueante).
+  // A password é sempre gerada pelo servidor (PED-57) — o cliente nunca a
+  // escolhe nem a envia. Mostra-se uma única vez (pendingPassword, que nunca
+  // é persistido, ver useEffectA de gravação abaixo) e troca-se de imediato
+  // por um refresh token para qualquer sessão futura.
   useEffectA(() => {
     if (S.account && !S.candidateId && S.candidate.name && S.candidate.email) {
       fetch('/api/candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null, cc: S.candidate.cc || null, profissao: S.candidate.profissao || null, nif: S.candidate.nif || null, rua: S.candidate.rua || null, porta: S.candidate.porta || null, codigo_postal: S.candidate.codigo_postal || null, cidade: S.candidate.cidade || null, password: S.account.password }),
+        body: JSON.stringify({ name: S.candidate.name, email: S.candidate.email, dob: S.candidate.dob || null, phone: S.candidate.contact || null, cc: S.candidate.cc || null, profissao: S.candidate.profissao || null, nif: S.candidate.nif || null, rua: S.candidate.rua || null, porta: S.candidate.porta || null, codigo_postal: S.candidate.codigo_postal || null, cidade: S.candidate.cidade || null }),
       })
         .then((r) => r.json())
         .then(async (data) => {
@@ -233,10 +255,14 @@ function App() {
             const authRes = await fetch('https://mamvckyoqrjhivffimob.supabase.co/auth/v1/token?grant_type=password', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM' },
-              body: JSON.stringify({ email: S.candidate.email, password: S.account.password }),
+              body: JSON.stringify({ email: S.candidate.email, password: data.initialPassword }),
             });
             const authData = await authRes.json();
-            if (authData.access_token) setCandidateJwtRaw(authData.access_token);
+            if (authData.access_token) {
+              setCandidateJwtRaw(authData.access_token);
+              setS((p) => ({ ...p, account: { email: S.candidate.email, refreshToken: authData.refresh_token }, pendingPassword: data.initialPassword }));
+              addMessage({ from: 'agent', id: 'cred' + Date.now(), card: 'credentials' });
+            }
           } catch (_) {}
         })
         .catch(() => {});
@@ -365,9 +391,10 @@ function App() {
     });
   }, [realContactRequests, S.candidateId]);
   // — Fase 3: conta, sessão, perfil, formalização e conteúdos —
-  const createAccount = (email) => { const password = window.PEDAL.genPassword(); setS((p) => ({ ...p, account: { email, password, createdAt: Date.now() } })); return password; };
+  // A password é sempre gerada pelo servidor (PED-57/PED-59) — isto só marca
+  // que há um registo pendente; o efeito acima faz o POST e trata do resto.
+  const createAccount = (email) => { setS((p) => ({ ...p, account: { email, createdAt: Date.now() } })); };
   const setSession = (authed) => setS((p) => ({ ...p, session: { ...p.session, authed } }));
-  const changePassword = (password) => setS((p) => ({ ...p, account: { ...(p.account || {}), password } }));
   const setModuleContent = (id, patch) => setS((p) => ({ ...p, moduleContent: { ...p.moduleContent, [id]: { ...(p.moduleContent[id] || {}), ...patch } } }));
   const setCoordJwt = (jwt) => setCoordJwtRaw(jwt);
   const setCoordRole = (role) => setCoordRoleRaw(role);
@@ -778,7 +805,7 @@ function App() {
     setResetKey((k) => k + 1);
   };
 
-  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, changePassword, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveDocumentUrl, uploadDocument, uploadAndSaveDocument, documentUrls, saveModuleAgentInfo, uploadModuleDocument, removeModuleDocument, moduleAgentInfo, moduleDocuments, generalKnowledge, saveGeneralKnowledge, aiEnabled, askAI, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
+  const store = { S, addMessage, patchCandidate, setStage, notify, setOnboarding, setChat, up, goTab, reset, setScheduling, setOverride, addTrainer, removeTrainer, addContactRequest, resolveContact, answerContactRequest, addModuleMessage, createAccount, setSession, setModuleContent, addStation, updateStation, removeStation, addMgmtUser, removeMgmtUser, updateMgmtUser, setCoordProfile, saveNeedsSchedule, saveIntroVideo, saveDocumentUrl, uploadDocument, uploadAndSaveDocument, documentUrls, saveModuleAgentInfo, uploadModuleDocument, removeModuleDocument, moduleAgentInfo, moduleDocuments, generalKnowledge, saveGeneralKnowledge, aiEnabled, askAI, addLocality, removeLocality, renameLocality, reorderLocalities, coordJwt, setCoordJwt, clearCoordJwt, coordRole, setCoordRole, coordProfile, setCoordProfile, patchRealCandidate, patchCandidateStage, refreshCandidates, realCandidates, passwordJustChanged, realTrainers, realNeeds, realStations, realLocalities, realNotifs, realContactRequests, introVideoUrl, candidateJwt, setCandidateJwt: setCandidateJwtRaw, setView, chatLoaded };
 
   const tone = (t.tone || 'Caloroso').toLowerCase();
   const fs = { Normal: 1, Grande: 1.13, Maior: 1.26 }[t.textSize] || 1;
