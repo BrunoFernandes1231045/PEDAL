@@ -8,13 +8,26 @@
 
 const { useState: useStateR, useEffect: useEffectR } = React;
 
-// Mesmo projeto Supabase (URL + anon key) já usado em pedal-auth.jsx/pedal-app.jsx/pedal-dashboard.jsx.
-const SUPABASE_URL_R = 'https://mamvckyoqrjhivffimob.supabase.co';
-const SUPABASE_ANON_KEY_R = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM';
+// O backend injeta a configuração pública antes deste script ser avaliado.
+const passwordRecoveryAuthConfig = window.__PEDAL_AUTH_CONFIG || {};
+const SUPABASE_URL_R = passwordRecoveryAuthConfig.supabaseUrl || '';
+const SUPABASE_ANON_KEY_R = passwordRecoveryAuthConfig.supabaseAnonKey || '';
+
+// Guardar a intenção antes de o SDK consumir os parâmetros Auth do URL.
+// Recuperações e convites partilham esta página; num convite o utilizador
+// define a primeira password sem a aplicação gerar ou revelar credenciais.
+const passwordLinkQuery = new URLSearchParams(window.location.search);
+const passwordLinkHash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+const passwordLinkType = passwordLinkHash.get('type') || passwordLinkQuery.get('type');
+const passwordLinkPurpose = passwordLinkQuery.get('tipo') || (passwordLinkType === 'invite' ? 'convite' : 'recuperacao');
+const isInviteLink = passwordLinkPurpose.startsWith('convite') || passwordLinkType === 'invite';
+const hasInviteAuthEvidence = passwordLinkType === 'invite'
+  && (passwordLinkHash.has('access_token') || passwordLinkQuery.has('code'));
+const PASSWORD_LINK_MARKER_KEY = 'pedal_password_link_marker';
 
 const supabaseAuthClient = window.supabase.createClient(SUPABASE_URL_R, SUPABASE_ANON_KEY_R);
 
-// ── Deteção do evento PASSWORD_RECOVERY sem condição de corrida ─────────────
+// ── Deteção de recuperação/convite sem condição de corrida ──────────────────
 // O cliente Supabase começa a processar a ligação de recuperação do URL logo que
 // é criado (linha acima), antes de qualquer componente React montar. Se só
 // ouvíssemos onAuthStateChange dentro de um useEffect, podíamos perder o evento.
@@ -22,11 +35,49 @@ const supabaseAuthClient = window.supabase.createClient(SUPABASE_URL_R, SUPABASE
 let recoveryEventSeen = false;
 let recoverySession = null;
 const recoveryListeners = [];
+
+function readPasswordLinkMarker() {
+  try {
+    const raw = sessionStorage.getItem(PASSWORD_LINK_MARKER_KEY);
+    if (!raw) return null;
+    const marker = JSON.parse(raw);
+    return marker && typeof marker.userId === 'string' && typeof marker.purpose === 'string'
+      ? marker
+      : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function writePasswordLinkMarker(purpose, session) {
+  const userId = session?.user?.id;
+  if (!userId) return;
+  try {
+    sessionStorage.setItem(PASSWORD_LINK_MARKER_KEY, JSON.stringify({ purpose, userId }));
+    // Remover marcadores menos restritivos de versões anteriores.
+    sessionStorage.removeItem('pedal_password_link_active');
+    sessionStorage.removeItem('pedal_password_link_purpose');
+    sessionStorage.removeItem('pedal_recovery_active');
+  } catch (_) {}
+}
+
 supabaseAuthClient.auth.onAuthStateChange((event, session) => {
-  if (event === 'PASSWORD_RECOVERY') {
+  const validRecovery = event === 'PASSWORD_RECOVERY';
+  // SIGNED_IN é emitido quando o SDK troca um convite válido por uma sessão.
+  // INITIAL_SESSION pode ser apenas uma sessão antiga do browser: só a aceitamos
+  // para retomar uma ligação já validada nesta aba e para o mesmo user.id.
+  const marker = readPasswordLinkMarker();
+  const validInviteSignIn = isInviteLink && hasInviteAuthEvidence && event === 'SIGNED_IN' && session;
+  const validInviteResume = isInviteLink
+    && event === 'INITIAL_SESSION'
+    && session
+    && marker?.purpose === 'convite'
+    && marker.userId === session.user?.id;
+  const validInvite = validInviteSignIn || validInviteResume;
+  if (validRecovery || validInvite) {
     recoveryEventSeen = true;
     recoverySession = session;
-    try { sessionStorage.setItem('pedal_recovery_active', '1'); } catch (_) {}
+    writePasswordLinkMarker(validInvite ? 'convite' : 'recuperacao', session);
     recoveryListeners.forEach((fn) => fn(session));
   }
 });
@@ -48,6 +99,10 @@ function waitForRecoverySession(onValid) {
 function getLoginUrl() {
   const role = recoverySession && recoverySession.user && recoverySession.user.app_metadata && recoverySession.user.app_metadata.role;
   return role === 'coordinator' ? '/coordenacao.html' : '/PEDAL.html';
+}
+
+function getCompletionUrl() {
+  return `${getLoginUrl()}?${isInviteLink ? 'conta-ativada=1' : 'palavra-passe-alterada=1'}`;
 }
 
 // ── Configuração (envio de email ligado/desligado) ──────────────────────────
@@ -210,14 +265,20 @@ function NewPasswordPage() {
 
     const stopListening = waitForRecoverySession(markValid);
 
-    // Refresh a meio do fluxo: já não há evento PASSWORD_RECOVERY para ouvir (o URL
-    // já foi consumido e limpo pelo SDK), mas se esta mesma aba já o tiver visto
-    // antes e ainda existir uma sessão válida, o pedido de refresh continua legítimo.
-    let sawRecoveryBefore = false;
-    try { sawRecoveryBefore = sessionStorage.getItem('pedal_recovery_active') === '1'; } catch (_) {}
-    if (sawRecoveryBefore) {
+    // Refresh a meio do fluxo: o URL já foi consumido pelo SDK, mas a sessão
+    // continua legítima se esta mesma aba já tiver validado a ligação.
+    const marker = readPasswordLinkMarker();
+    if (marker) {
       supabaseAuthClient.auth.getSession().then(({ data }) => {
-        if (!cancelled && data && data.session) setLinkStatus('valid');
+        const session = data && data.session;
+        const expectedPurpose = isInviteLink ? 'convite' : 'recuperacao';
+        if (!cancelled
+          && session
+          && marker.purpose === expectedPurpose
+          && marker.userId === session.user?.id) {
+          recoverySession = data.session;
+          setLinkStatus('valid');
+        }
       });
     }
 
@@ -245,21 +306,26 @@ function NewPasswordPage() {
         setErrorMsg('Não foi possível alterar a palavra-passe. A ligação pode ter expirado. Solicite uma nova ligação e tente novamente.');
         return;
       }
-      try { sessionStorage.removeItem('pedal_recovery_active'); } catch (_) {}
-      const loginUrl = getLoginUrl();
+      try {
+        sessionStorage.removeItem(PASSWORD_LINK_MARKER_KEY);
+        sessionStorage.removeItem('pedal_password_link_active');
+        sessionStorage.removeItem('pedal_password_link_purpose');
+        sessionStorage.removeItem('pedal_recovery_active');
+      } catch (_) {}
+      const completionUrl = getCompletionUrl();
       supabaseAuthClient.auth.signOut().catch(() => {}).finally(() => {
         setLoading(false);
         setDone(true);
-        setTimeout(() => { window.location.href = `${loginUrl}?palavra-passe-alterada=1`; }, 1800);
+        setTimeout(() => { window.location.href = completionUrl; }, 1800);
       });
     });
   };
 
   if (linkStatus === 'validating') {
     return (
-      <AuthPageShell title="Definir nova palavra-passe">
+      <AuthPageShell title={isInviteLink ? 'Ativar conta' : 'Definir nova palavra-passe'}>
         <div role="status" style={{ font: '500 14px var(--ui)', color: 'var(--ink-soft)', textAlign: 'center', padding: '18px 0' }}>
-          A validar a ligação de recuperação…
+          A validar a ligação…
         </div>
       </AuthPageShell>
     );
@@ -269,9 +335,11 @@ function NewPasswordPage() {
     return (
       <AuthPageShell title="Ligação inválida ou expirada">
         <p style={{ font: '500 13px/1.6 var(--ui)', color: 'var(--ink-soft)', textAlign: 'center', margin: '0 0 16px' }}>
-          Esta ligação de recuperação já não é válida. Solicite uma nova ligação.
+          {isInviteLink
+            ? 'Este convite já não é válido. Peça à associação que envie um novo convite.'
+            : 'Esta ligação de recuperação já não é válida. Solicite uma nova ligação.'}
         </p>
-        <a href="/recuperar-palavra-passe" className="pedal-btn primary" style={{ width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}>Solicitar nova ligação</a>
+        {!isInviteLink && <a href="/recuperar-palavra-passe" className="pedal-btn primary" style={{ width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}>Solicitar nova ligação</a>}
         <div style={{ textAlign: 'center', marginTop: 14 }}>
           <button type="button" onClick={() => window.history.back()} className="pedal-authlink">← Voltar ao login</button>
         </div>
@@ -281,16 +349,16 @@ function NewPasswordPage() {
 
   if (done) {
     return (
-      <AuthPageShell title="Palavra-passe alterada">
+      <AuthPageShell title={isInviteLink ? 'Conta ativada' : 'Palavra-passe alterada'}>
         <div className="pedal-autherr" role="status" style={{ color: 'var(--primary-deep)', background: 'var(--primary-soft)' }}>
-          <Icon name="check" size={14} />Palavra-passe alterada com sucesso. A regressar ao login…
+          <Icon name="check" size={14} />{isInviteLink ? 'Conta ativada com sucesso.' : 'Palavra-passe alterada com sucesso.'} A regressar ao login…
         </div>
       </AuthPageShell>
     );
   }
 
   return (
-    <AuthPageShell title="Definir nova palavra-passe">
+    <AuthPageShell title={isInviteLink ? 'Ativar conta' : 'Definir nova palavra-passe'} subtitle={isInviteLink ? 'Defina uma palavra-passe pessoal para concluir o convite.' : null}>
       <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <Field label="Nova palavra-passe" inputId="new-pw-1">
           <PasswordInput id="new-pw-1" value={pw1} onChange={setPw1} placeholder="Mínimo 8 caracteres" onEnter={submit} />

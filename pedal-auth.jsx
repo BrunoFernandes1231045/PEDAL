@@ -49,7 +49,7 @@ function AuthGate({ store }) {
       const localities = profile.locality ? profile.locality.split(', ').filter(Boolean).map((n) => { const f = locs && locs.find((l) => l.name === n); return f ? f.id : n; }) : [];
       const availability = Array.isArray(profile.availability) ? profile.availability : [];
       const savedMessages = Array.isArray(profile.chat_messages) && profile.chat_messages.length ? profile.chat_messages : [];
-      store.up({ candidateId: profile.id, account: { email: email.trim(), password: pw.trim() }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
+      store.up({ candidateId: profile.id, account: { email: email.trim(), refreshToken: data.refresh_token }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
       store.patchCandidate({ name: profile.name || '', email: profile.email || '', dob: profile.dob || '', contact: profile.phone || '', cc: profile.cc || '', localities, periods, availability });
       store.setStage(profile.stage || 'inscricao');
       if (profile.scheduling && profile.scheduling.slots && profile.scheduling.slots.length) {
@@ -87,7 +87,7 @@ function AuthGate({ store }) {
               <input className="pedal-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.pt" />
             </Field>
             <Field label="Palavra-passe">
-              <input className="pedal-input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="A que recebeste por email" />
+              <input className="pedal-input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="A palavra-passe que definiste" />
             </Field>
             {err && <div className="pedal-autherr"><Icon name="shield" size={14} />{err}</div>}
             <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} disabled={loading || !email.trim() || !pw.trim()} onClick={tryLogin}>{loading ? 'A entrar…' : 'Entrar'}</button>
@@ -95,7 +95,7 @@ function AuthGate({ store }) {
               <a href="/recuperar-palavra-passe" className="pedal-authlink">Esqueceu-se da palavra-passe?</a>
             </div>
             <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '14px 0 0', textAlign: 'center' }}>
-              As credenciais chegam por email assim que terminares a inscrição.
+              Depois da inscrição, recebes uma ligação para confirmar o email e definir a tua palavra-passe.
             </p>
           </div>
         ) : (
@@ -104,7 +104,7 @@ function AuthGate({ store }) {
               {[
                 { ic: 'chat', t: 'Conhece o projeto e tira dúvidas comigo' },
                 { ic: 'doc', t: 'Faz a inscrição em poucos minutos' },
-                { ic: 'lock', t: 'Recebes as credenciais de acesso por email' },
+                { ic: 'lock', t: 'Confirmas o email e defines a tua palavra-passe' },
               ].map((s) => (
                 <div key={s.t} className="pedal-authstep">
                   <span className="pedal-authstepic"><Icon name={s.ic} size={16} color="var(--primary)" /></span>
@@ -124,8 +124,9 @@ function AuthGate({ store }) {
 }
 
 // ── Painel de login (acede ao perfil; entrada direta no agente dispensa-o) ──
-const SUPABASE_URL = 'https://mamvckyoqrjhivffimob.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM';
+const PEDAL_AUTH_CONFIG = window.__PEDAL_AUTH_CONFIG || {};
+const SUPABASE_URL = PEDAL_AUTH_CONFIG.supabaseUrl || '';
+const SUPABASE_ANON_KEY = PEDAL_AUTH_CONFIG.supabaseAnonKey || '';
 
 function LoginPanel({ store }) {
   const S = store.S;
@@ -205,7 +206,7 @@ function LoginPanel({ store }) {
       const availability = Array.isArray(profile.availability) ? profile.availability : [];
 
       const savedMessages = Array.isArray(profile.chat_messages) && profile.chat_messages.length ? profile.chat_messages : [];
-      store.up({ candidateId: profile.id, account: { email: email.trim(), password: pw.trim() }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
+      store.up({ candidateId: profile.id, account: { email: email.trim(), refreshToken: data.refresh_token }, ...(savedMessages.length ? { messages: savedMessages } : {}) });
       store.patchCandidate({ name: profile.name || '', email: profile.email || '', dob: profile.dob || '', contact: profile.phone || '', cc: profile.cc || '', localities, periods, availability });
       store.setStage(profile.stage || 'inscricao');
       if (profile.scheduling && profile.scheduling.slots && profile.scheduling.slots.length) {
@@ -254,13 +255,18 @@ function LoginPanel({ store }) {
               <Icon name="check" size={14} />Palavra-passe alterada com sucesso. Já pode iniciar sessão.
             </div>
           )}
+          {store.accountJustActivated && (
+            <div className="pedal-autherr" role="status" style={{ color: 'var(--primary-deep)', background: 'var(--primary-soft)' }}>
+              <Icon name="check" size={14} />Conta ativada e palavra-passe definida. Já podes iniciar sessão.
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16 }}>
             <Avatar size={54} />
             <div style={{ font: '800 18px var(--display)', color: 'var(--ink)', marginTop: 12 }}>Bem-vindo(a) de volta</div>
             <p style={{ font: '400 13px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '4px 0 0', textAlign: 'center', maxWidth: 260 }}>Entra para ver e gerir o teu perfil. Para te candidatares, é só conversar com o PEDAL — não precisas de conta. 🚲</p>
           </div>
           <Field label="Email"><input className="pedal-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@email.pt" onKeyDown={(e) => e.key === 'Enter' && tryLogin()} /></Field>
-          <Field label="Palavra-passe"><input className="pedal-input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="A que recebeste por email" onKeyDown={(e) => e.key === 'Enter' && tryLogin()} /></Field>
+          <Field label="Palavra-passe"><input className="pedal-input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="A palavra-passe que definiste" onKeyDown={(e) => e.key === 'Enter' && tryLogin()} /></Field>
           {err && <div className="pedal-autherr"><Icon name="shield" size={14} />{err}</div>}
           <button className="pedal-btn primary" style={{ width: '100%', marginTop: 6 }} onClick={tryLogin} disabled={loading || !email.trim() || !pw.trim()}>
             {loading ? 'A entrar…' : 'Entrar'}
@@ -450,8 +456,40 @@ function ProfRow({ label, value, last }) {
 function CoordLoginScreen({ store }) {
   const [email, setEmail] = useStateAu('');
   const [pw, setPw] = useStateAu('');
+  const [mfaCode, setMfaCode] = useStateAu('');
+  const [mfaStep, setMfaStep] = useStateAu(null); // null | enroll | challenge
+  const [mfaContext, setMfaContext] = useStateAu(null);
   const [err, setErr] = useStateAu('');
   const [loading, setLoading] = useStateAu(false);
+
+  const authRequest = async (path, token, method = 'POST', body) => {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${token}`,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.msg || data.message || data.error_description || data.error || 'Falha na autenticação');
+    return data;
+  };
+
+  const finishCoordinatorLogin = (session, fallbackUser) => {
+    const user = session.user || fallbackUser;
+    const meta = user?.user_metadata || {};
+    const appMeta = user?.app_metadata || {};
+    const coordRole = appMeta.coord_role || 'coordenacao';
+    const ROLE_DISPLAY = { administracao: 'Administração', coordenacao: 'Coordenação' };
+    const roleValues = Object.values(ROLE_DISPLAY);
+    const normalizedEmail = user?.email || email.trim();
+    const displayName = (meta.name && !roleValues.includes(meta.name)) ? meta.name : normalizedEmail.split('@')[0];
+    store.setCoordProfile({ name: displayName, email: normalizedEmail, phone: meta.phone || '', role: ROLE_DISPLAY[coordRole] || 'Coordenação' });
+    store.setCoordRole(coordRole);
+    store.setCoordJwt(session.access_token);
+  };
 
   const handleLogin = async () => {
     if (!email || !pw) return;
@@ -464,24 +502,72 @@ function CoordLoginScreen({ store }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error_description || 'Credenciais inválidas'); return; }
-      const meta = data.user?.user_metadata || {};
       // role/coord_role vêm de app_metadata — user_metadata é editável pelo
       // próprio utilizador e não serve para decisões de acesso (PED-61).
       const appMeta = data.user?.app_metadata || {};
       if (appMeta.role !== 'coordinator') { setErr('Esta conta não tem acesso à coordenação'); return; }
-      const coordRole = appMeta.coord_role || 'coordenacao';
-      const ROLE_DISPLAY = { administracao: 'Administração', coordenacao: 'Coordenação' };
-      const roleValues = Object.values(ROLE_DISPLAY);
-      const displayName = (meta.name && !roleValues.includes(meta.name)) ? meta.name : email.split('@')[0];
-      store.setCoordProfile({ name: displayName, email, phone: meta.phone || '', role: ROLE_DISPLAY[coordRole] || 'Coordenação' });
-      store.setCoordRole(coordRole);
-      store.setCoordJwt(data.access_token);
+      setPw('');
+
+      const verifiedFactor = (data.user?.factors || []).find((factor) => factor.factor_type === 'totp' && factor.status === 'verified');
+      if (verifiedFactor) {
+        setMfaContext({ token: data.access_token, user: data.user, factorId: verifiedFactor.id });
+        setMfaStep('challenge');
+        return;
+      }
+
+      // Um login anterior pode ter sido interrompido depois de criar o fator,
+      // mas antes de o verificar. O segredo/QR desse fator já não é devolvido
+      // em logins posteriores; removê-lo permite recomeçar de forma recuperável.
+      const abandonedFactors = (data.user?.factors || []).filter((factor) => factor.factor_type === 'totp' && factor.status === 'unverified');
+      for (const factor of abandonedFactors) {
+        await authRequest(`/factors/${factor.id}`, data.access_token, 'DELETE');
+      }
+
+      const enrollment = await authRequest('/factors', data.access_token, 'POST', {
+        factor_type: 'totp',
+        friendly_name: 'PEDAL Coordenação',
+        issuer: 'Pedalar Sem Idade',
+      });
+      setMfaContext({
+        token: data.access_token,
+        user: data.user,
+        factorId: enrollment.id,
+        qrCode: enrollment.totp?.qr_code,
+        secret: enrollment.totp?.secret,
+      });
+      setMfaStep('enroll');
     } catch (e) {
-      setErr('Erro de ligação ao servidor');
+      setErr(e.message === 'Failed to fetch'
+        ? 'Erro de ligação ao servidor'
+        : `Não foi possível preparar a autenticação de dois fatores: ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
+
+  const verifyMfa = async () => {
+    if (!mfaContext || !/^\d{6}$/.test(mfaCode)) return;
+    setLoading(true); setErr('');
+    try {
+      const challenge = await authRequest(`/factors/${mfaContext.factorId}/challenge`, mfaContext.token, 'POST', {
+        factorId: mfaContext.factorId,
+      });
+      const session = await authRequest(`/factors/${mfaContext.factorId}/verify`, mfaContext.token, 'POST', {
+        challenge_id: challenge.id,
+        code: mfaCode,
+      });
+      finishCoordinatorLogin(session, mfaContext.user);
+    } catch (e) {
+      setErr('Código inválido ou expirado. Confirme o código na aplicação autenticadora e tente novamente.');
+      setMfaCode('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const qrCodeSrc = mfaContext?.qrCode
+    ? (mfaContext.qrCode.startsWith('data:') ? mfaContext.qrCode : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(mfaContext.qrCode)}`)
+    : null;
 
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 20 }}>
@@ -497,22 +583,68 @@ function CoordLoginScreen({ store }) {
           </div>
         )}
         {err && <div className="pedal-autherr" role="alert" style={{ marginBottom: 14 }}><Icon name="shield" size={14} />{err}</div>}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Email</div>
-            <input className="pedal-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="coordenador@pedal.pt" />
+        {mfaStep ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>
+              {mfaStep === 'enroll' ? 'Configurar autenticação de dois fatores' : 'Código de autenticação'}
+            </div>
+            {mfaStep === 'enroll' && (
+              <>
+                <p style={{ font: '500 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: 0 }}>
+                  Digitalize este código numa aplicação autenticadora, como Google Authenticator, Microsoft Authenticator ou 1Password.
+                </p>
+                {qrCodeSrc && <img src={qrCodeSrc} alt="Código QR para configurar autenticação de dois fatores" style={{ width: 180, height: 180, alignSelf: 'center' }} />}
+                {mfaContext?.secret && (
+                  <div style={{ font: '500 11.5px/1.45 var(--ui)', color: 'var(--ink-soft)', overflowWrap: 'anywhere' }}>
+                    Em alternativa, introduza esta chave manualmente: <strong style={{ color: 'var(--ink)', fontFamily: 'monospace' }}>{mfaContext.secret}</strong>
+                  </div>
+                )}
+              </>
+            )}
+            {mfaStep === 'challenge' && (
+              <p style={{ font: '500 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: 0 }}>
+                Introduza o código de 6 dígitos apresentado na sua aplicação autenticadora.
+              </p>
+            )}
+            <div>
+              <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Código de 6 dígitos</div>
+              <input
+                className="pedal-input"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                onKeyDown={(e) => e.key === 'Enter' && verifyMfa()}
+                autoFocus
+              />
+            </div>
+            <button className="pedal-btn primary" style={{ width: '100%', marginTop: 4 }} onClick={verifyMfa} disabled={loading || mfaCode.length !== 6}>
+              {loading ? 'A verificar…' : (mfaStep === 'enroll' ? 'Ativar e entrar' : 'Verificar e entrar')}
+            </button>
+            <button type="button" className="pedal-btn ghost" onClick={() => { setMfaStep(null); setMfaContext(null); setMfaCode(''); setErr(''); }}>
+              Voltar
+            </button>
           </div>
-          <div>
-            <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Palavra-passe</div>
-            <input className="pedal-input" type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && handleLogin()} />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Email</div>
+              <input className="pedal-input" type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="coordenador@pedal.pt" />
+            </div>
+            <div>
+              <div style={{ font: '700 12px var(--ui)', color: 'var(--ink-soft)', marginBottom: 5 }}>Palavra-passe</div>
+              <input className="pedal-input" type="password" autoComplete="current-password" value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && handleLogin()} />
+            </div>
+            <button className="pedal-btn primary" style={{ width: '100%', marginTop: 4 }} onClick={handleLogin} disabled={loading || !email || !pw}>
+              {loading ? 'A entrar…' : 'Continuar'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: 2 }}>
+              <a href="/recuperar-palavra-passe" className="pedal-authlink">Esqueceu-se da palavra-passe?</a>
+            </div>
           </div>
-          <button className="pedal-btn primary" style={{ width: '100%', marginTop: 4 }} onClick={handleLogin} disabled={loading || !email || !pw}>
-            {loading ? 'A entrar…' : 'Entrar'}
-          </button>
-          <div style={{ textAlign: 'center', marginTop: 2 }}>
-            <a href="/recuperar-palavra-passe" className="pedal-authlink">Esqueceu-se da palavra-passe?</a>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

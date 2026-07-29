@@ -60,6 +60,10 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'gdpr_consent': return [{ text: 'Antes de continuarmos, precisamos da tua autorização. 🔒' }, { text: 'Autorizas e aceitas o tratamento e acesso dos teus dados pessoais, cedidos no âmbito da candidatura como voluntário da Parábola Citadina Associação, dando permissão para seres contactado via e-mail ou telefone no âmbito deste projeto?' }];
       case 'gdpr_refused': return [{ text: '😔 Sem a tua autorização não é possível prosseguir com a candidatura.' }, { text: 'Se mudares de ideias, podes alterar a resposta.' }];
       case 'collect': return [{ text: 'Primeiro, fico a conhecer-te.' }];
+      case 'email_verification': return [
+        { text: 'Obrigado! A tua inscrição foi recebida. 📬' },
+        { text: 'Enviámos uma ligação para o endereço indicado. Abre-a para confirmar o email e escolher a tua palavra-passe. Só depois poderás continuar a candidatura.' },
+      ];
       case 'triage': return [{ text: `Prazer, ${first || 'bem-vindo'}! 🙌 Agora diz-me onde e quando gostarias de pedalar.` }, { text: 'Os passeios decorrem normalmente de manhã entre as 10h e as 12h, ou de tarde entre as 14h e as 17h. Tenha isso em conta ao preencher a disponibilidade. 🕐' }];
       case 'triage_result': {
         const r = triageResultRef.current || {};
@@ -156,6 +160,7 @@ function ChatView({ store, tone = 'caloroso' }) {
       case 'gdpr_consent': return { type: 'quick', options: [{ label: 'Sim, autorizo ✓', go: 'collect', accent: 'fill' }, { label: 'Não autorizo', go: 'gdpr_refused' }] };
       case 'gdpr_refused': return { type: 'quick', options: [{ label: 'Alterar resposta', go: 'gdpr_consent' }] };
       case 'collect': return { type: 'form_profile' };
+      case 'email_verification': return { type: 'note', text: 'Consulta também a pasta de spam. A ligação é de utilização única.' };
       case 'triage': return { type: 'triage' };
       case 'triage_result': {
         const r = triageResultRef.current || {};
@@ -283,7 +288,9 @@ function ChatView({ store, tone = 'caloroso' }) {
         fetch(`/api/candidates/${S.candidateId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${store.candidateJwt}` },
-          body: JSON.stringify({ interview: answers }),
+          // Envia respostas + transição atomicamente: o backend só permite
+          // chegar a validação quando o questionário obrigatório está completo.
+          body: JSON.stringify({ interview: answers, stage: 'validacao' }),
         }).catch(() => {});
       }
       enterNode('await_validation');
@@ -535,15 +542,14 @@ function ChatView({ store, tone = 'caloroso' }) {
             <div className="pedal-card">
               <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 9 }}>
                 <span style={{ color: 'var(--primary)', display: 'flex' }}><Icon name="lock" size={18} /></span>
-                <span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>A tua conta está criada 🎉</span>
+                <span style={{ font: '700 14px var(--display)', color: 'var(--ink)' }}>Confirma o teu email 📬</span>
               </div>
               <p style={{ font: '400 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: 0 }}>
-                Enviámos as credenciais de acesso para <strong style={{ color: 'var(--ink)' }}>{acc.email}</strong>. Guarda-as — podes entrar a qualquer momento.
+                Enviámos uma ligação de utilização única para <strong style={{ color: 'var(--ink)' }}>{acc.email}</strong>. Abre-a para escolheres a tua palavra-passe.
               </p>
               <div className="pedal-credhint" style={{ marginTop: 11 }}>
-                <span style={{ font: '700 10px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>Enviado por email</span>
+                <span style={{ font: '700 10px var(--ui)', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-deep)' }}>Ligação enviada por email</span>
                 <div className="pedal-credrow"><span>Email</span><strong>{acc.email}</strong></div>
-                {S.pendingPassword && <div className="pedal-credrow"><span>Palavra-passe</span><strong>{S.pendingPassword}</strong></div>}
               </div>
             </div>
           </div>
@@ -606,15 +612,16 @@ function ChatView({ store, tone = 'caloroso' }) {
       );
     }
     if (it.type === 'card:consent') return <ConsentCard onAccept={() => { addMessage({ from: 'system', text: 'Consentimento de dados aceite (RGPD)' }); enterNode('gdpr_consent'); }} onMore={() => say([{ text: 'Os teus dados ficam acessíveis apenas à coordenação da Pedalar Sem Idade, são usados só para o processo de voluntariado e podes pedir para os eliminar a qualquer momento. 🔒' }], () => setInteraction(interactionFor('consent')))} />;
-    if (it.type === 'form_profile') return <ProfileForm onSubmit={(d) => {
+    if (it.type === 'form_profile') return <ProfileForm onSubmit={async (d) => {
+      const result = await store.createAccount(d);
+      if (!result.ok) {
+        addMessage({ from: 'agent', text: `Não consegui concluir a inscrição: ${result.error}` });
+        return;
+      }
       patchCandidate(d);
-      store.createAccount(d.email);
-      store.setSession(true);
       addMessage({ from: 'user', text: `${d.name} · ${d.contact}` });
-      addMessage({ from: 'system', text: 'Inscrição criada · a preparar a tua conta…' });
-      // O cartão de credenciais só é adicionado quando o servidor confirma a
-      // criação da conta e devolve a password gerada por ele (ver pedal-app.jsx).
-      enterNode('triage');
+      addMessage({ from: 'system', text: 'Inscrição recebida · email de ativação enviado' });
+      enterNode('email_verification');
     }} />;
     if (it.type === 'triage') return <TriageForm localities={allLocalities} initial={S.candidate.availability} onSubmit={(d) => {
       patchCandidate({ localities: d.localities, locality: d.locality, periods: d.periods, availability: d.availability });
