@@ -6,7 +6,50 @@ entregas futuras e ser atualizada quando a arquitetura, os fornecedores ou os
 controlos operacionais mudarem. Não assume que já existe uma aplicação em
 produção nem que um projeto Supabase anterior será reutilizado.
 
-## 1. Definir o ambiente e a estratégia de dados
+## 1. Confirmar a arquitetura e o orçamento
+
+A referência aprovada no relatório de cliente de **28 de julho de 2026** é:
+
+| Componente | Decisão de base | Estimativa mensal |
+| --- | --- | ---: |
+| Aplicação | Railway Hobby | 5–10 USD |
+| Base de dados e autenticação | Supabase Pro, compute Micro | 25 USD |
+| Assistente | Google Gemini, pago por utilização | 0–10 USD |
+| Email transacional | Google Workspace SMTP no Supabase Auth | 0 EUR adicionais |
+| Domínio | Domínio existente da associação | 0 EUR adicionais |
+| Repositório | Organização GitHub Free, código privado | 0 USD |
+
+Orçamento de referência: **30–45 USD/mês, acrescido de IVA**. Os preços e
+condições dos fornecedores podem mudar; confirmar os valores atuais antes de
+contratar, registar quem aprovou a despesa e atualizar esta tabela se a decisão
+mudar.
+
+O primeiro objetivo operacional é suportar **50 utilizadores ativos em
+simultâneo**. Este número é um limite inicial prudente, não uma garantia nem um
+limite técnico publicado pelos fornecedores. Validá-lo com testes de carga e
+métricas reais antes de o aumentar ou de assumir um compromisso de serviço.
+
+Guardrails iniciais de custo e capacidade:
+
+- Railway: alerta de utilização nos **8 USD** e hard limit nos **20 USD**;
+  rever mensalmente, porque ao atingir o hard limit a aplicação pode ficar
+  indisponível.
+- Supabase: começar com o **Spend Cap ativo** e compute Micro; acompanhar CPU,
+  memória, latência e disco. Subir manualmente para Small apenas quando as
+  métricas o justificarem. À data do relatório, o custo líquido estimado de
+  Pro + Small era 30 USD/mês.
+- Gemini: criar orçamento e alertas no Google Cloud, definir quota por projeto,
+  limitar pedidos por utilizador e limitar o tamanho de contexto e resposta.
+  Esgotar a quota deve limitar apenas o assistente, não a restante aplicação.
+- Email: acompanhar erros de envio no Supabase e as quotas do Google Workspace;
+  atingir a quota pode afetar convites e recuperação de acesso.
+
+## 2. Definir os ambientes e a estratégia de dados
+
+- Produção: Railway Hobby + projeto Supabase Pro dedicado.
+- Desenvolvimento individual: aplicação e Supabase locais.
+- Testes partilhados, quando necessários: projeto Supabase Free separado de
+  produção.
 
 - Garantir que Railway e Supabase de produção estão separados de
   desenvolvimento/testes.
@@ -21,7 +64,7 @@ produção nem que um projeto Supabase anterior será reutilizado.
   contas, informar essas pessoas de que terão de iniciar sessão novamente e
   configurar TOTP.
 
-## 2. Cloudflare Turnstile
+## 3. Cloudflare Turnstile
 
 1. Confirmar a conta Cloudflare da associação; criá-la no primeiro ambiente.
 2. Criar ou reutilizar um widget Turnstile do tipo **Managed**.
@@ -45,7 +88,7 @@ O plano gratuito do Turnstile é suficiente para este caso. A conta externa
 continua a ser necessária porque é nela que se criam e rodam as chaves e se
 limitam os hostnames.
 
-## 3. Configurar o Supabase de produção
+## 4. Configurar o Supabase de produção
 
 Criar ou selecionar o projeto Supabase de produção e configurar no Railway:
 
@@ -59,6 +102,8 @@ PUBLIC_APP_URL=https://<dominio-canonico>
 COORDINATOR_INVITE_REDIRECT_URL=https://<dominio-canonico>/nova-palavra-passe?tipo=convite-coordenacao
 COORDINATOR_MFA_REQUIRED=true
 PASSWORD_RECOVERY_EMAIL_ENABLED=true
+AI_ENABLED=true
+GEMINI_API_KEY=<chave-do-projeto-google-cloud>
 ```
 
 No projeto Supabase:
@@ -77,9 +122,18 @@ No projeto Supabase:
   - `https://<dominio-canonico>/nova-palavra-passe`
 - configurar SMTP com um remetente da associação e testar a entrega;
 - confirmar que TOTP MFA está ativo;
+- confirmar que o Spend Cap está ativo e que existem alertas de utilização;
+- configurar o SMTP do Google Workspace no Supabase Auth e acompanhar erros e
+  quotas de envio;
+- confirmar que a chave Gemini pertence ao projeto com orçamento e quotas
+  aprovados;
 - não expor a `service_role` no frontend, logs ou respostas HTTP.
 
-## 4. Aplicar migrations
+Se o assistente ainda não estiver aprovado ou configurado, usar
+`AI_ENABLED=false`. Esta opção não deve impedir o funcionamento das restantes
+áreas da aplicação.
+
+## 5. Aplicar migrations
 
 Num projeto Supabase vazio, aplicar **todos** os ficheiros existentes em
 `backend/supabase/migrations/` pela ordem numérica dos nomes.
@@ -103,9 +157,13 @@ Não avançar para o deploy enquanto:
 - a lista final de coordenadores importados em `app_metadata` não tiver sido
   confirmada.
 
-## 5. Deploy
+## 6. Deploy
 
 - Fazer deploy do backend e frontend a partir do mesmo estado de código.
+- Ligar o Railway ao repositório privado da organização GitHub da associação e
+  limitar quem pode alterar deploys e segredos.
+- Associar o domínio existente e validar DNS, HTTPS e redirecionamento para a
+  URL canónica.
 - Confirmar que o Railway não está a usar valores do ficheiro de exemplo.
 - Verificar nos logs que não existem erros de configuração, migrations ou SMTP.
 - Confirmar que a página `/nova-palavra-passe` está acessível antes de enviar o
@@ -117,7 +175,7 @@ Não avançar para o deploy enquanto:
 Para fechar temporariamente o registo sem reabrir a falha, remover/desativar a
 configuração Turnstile. O endpoint fica indisponível em modo fail-closed.
 
-## 6. Garantir uma conta de administração
+## 7. Garantir uma conta de administração
 
 Num ambiente vazio existe um problema circular: só um administrador pode
 convidar outros coordenadores. Criar o primeiro administrador através do script
@@ -162,7 +220,7 @@ outras pessoas.
 Depois disso, todos os outros utilizadores de coordenação são criados pela área
 de Gestão da aplicação.
 
-## 7. Smoke tests autorizados
+## 8. Smoke tests autorizados
 
 ### Registo
 
@@ -197,13 +255,39 @@ de Gestão da aplicação.
   nenhum recurso.
 - Os fluxos legítimos continuam a funcionar apenas através do backend.
 
-## 8. Evidência da entrega
+### Capacidade e degradação
+
+- Executar um teste de carga autorizado que represente até 50 utilizadores
+  ativos em simultâneo e registar latência, erros, CPU e memória.
+- Confirmar que desativar o assistente, ou esgotar a quota de testes do Gemini,
+  não bloqueia registo, autenticação, candidaturas ou coordenação.
+- Confirmar que os alertas de custo do Railway, Supabase e Google Cloud chegam
+  às pessoas responsáveis.
+
+## 9. Operação e revisão
+
+- Rever mensalmente utilização, custos, erros, latência, CPU, memória e disco.
+- No Railway, ajustar o hard limit antes de um aumento de tráfego planeado; não
+  o remover sem aprovação de orçamento.
+- No Supabase, autorizar crescimento de disco ou mudança de compute apenas com
+  base nas métricas. O compute não aumenta automaticamente.
+- Rever quotas do Gemini e limites do assistente sem usar a disponibilidade da
+  aplicação principal como contrapartida.
+- Rever acessos ao Railway, Supabase, Cloudflare, Google Cloud, Google Workspace
+  e GitHub quando alguém entra, muda de função ou sai da associação.
+- Atualizar este playbook sempre que mudar um fornecedor, plano, domínio,
+  orçamento ou requisito de capacidade.
+
+## 10. Evidência da entrega
 
 Guardar, sem dados pessoais ou segredos:
 
 - identificador do deploy;
+- arquitetura, planos e orçamento aprovados;
+- configuração dos alertas, hard limits e Spend Cap;
 - resultado das migrations e contagem de revisões pendentes;
 - resultados dos smoke tests;
+- resultado do teste de carga para o limite operacional acordado;
 - confirmação de SMTP, Turnstile e TOTP;
 - resultado da suíte automatizada;
 - responsável e data da validação.
