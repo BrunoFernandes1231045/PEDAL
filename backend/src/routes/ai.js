@@ -1,6 +1,7 @@
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const router = express.Router();
+const { clientIp } = require('../lib/clientIp');
 
 const AI_ENABLED = process.env.AI_ENABLED === 'true';
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
@@ -50,7 +51,7 @@ router.get('/config', (req, res) => res.json({ aiEnabled: AI_ENABLED }));
 router.post('/ask', async (req, res) => {
   if (!AI_ENABLED || !genAI) return res.json({ confident: false });
 
-  if (rateLimited(req.ip)) return res.status(429).json({ confident: false, error: 'Demasiados pedidos. Tenta de novo dentro de um minuto.' });
+  if (rateLimited(clientIp(req))) return res.status(429).json({ confident: false, error: 'Demasiados pedidos. Tenta de novo dentro de um minuto.' });
 
   const question = (req.body.question || '').trim();
   if (!question) return res.status(400).json({ error: 'Pergunta em falta' });

@@ -1,9 +1,9 @@
 jest.mock('../../src/db/supabase', () => {
   const chain = {
     select: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
+    upsert: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn(),
     single: jest.fn(),
   };
   return { from: jest.fn(() => chain) };
@@ -23,44 +23,35 @@ beforeEach(() => {
   jest.clearAllMocks();
   const chain = supabase.from();
   chain.select.mockReturnThis();
-  chain.insert.mockReturnThis();
-  chain.update.mockReturnThis();
+  chain.upsert.mockReturnThis();
   chain.eq.mockReturnThis();
 });
 
 describe('GET /api/needs', () => {
   it('returns needs', async () => {
-    supabase.from().select.mockResolvedValue({
-      data: [{ id: 'n-1', status: 'open' }], error: null,
+    supabase.from().maybeSingle.mockResolvedValue({
+      data: { value: { Porto: { Manhã: 2 } } }, error: null,
     });
     const res = await request(app)
       .get('/api/needs').set('Authorization', 'Bearer valid-token');
     expect(res.status).toBe(200);
-    expect(res.body[0].status).toBe('open');
+    expect(res.body).toEqual({ Porto: { Manhã: 2 } });
   });
 });
 
-describe('POST /api/needs', () => {
-  it('creates need and returns 201', async () => {
+describe('PUT /api/needs', () => {
+  it('replaces the needs schedule', async () => {
     supabase.from().single.mockResolvedValue({
-      data: { id: 'n-2', status: 'open' }, error: null,
+      data: { value: { Porto: { Manhã: 3 } } }, error: null,
     });
     const res = await request(app)
-      .post('/api/needs').set('Authorization', 'Bearer valid-token')
-      .send({ locality_id: 'loc-1', periods: ['Manhãs'] });
-    expect(res.status).toBe(201);
-  });
-});
-
-describe('PATCH /api/needs/:id', () => {
-  it('closes a need', async () => {
-    supabase.from().single.mockResolvedValue({
-      data: { id: 'n-1', status: 'closed' }, error: null,
-    });
-    const res = await request(app)
-      .patch('/api/needs/n-1').set('Authorization', 'Bearer valid-token')
-      .send({ status: 'closed' });
+      .put('/api/needs').set('Authorization', 'Bearer valid-token')
+      .send({ Porto: { Manhã: 3 } });
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('closed');
+    expect(res.body).toEqual({ Porto: { Manhã: 3 } });
+    expect(supabase.from().upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'needs_schedule', value: { Porto: { Manhã: 3 } } }),
+      { onConflict: 'key' },
+    );
   });
 });

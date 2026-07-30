@@ -185,12 +185,12 @@ function Dashboard({ store }) {
   function validate(c) {
     if (isLiveCandidate(c)) {
       store.up({ validated: true }); store.setStage('onboarding');
-      store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+      store.notify({ type: 'validado', candidateId: c.id, text: 'foi validado(a) pela coordenação — segue para onboarding' });
       return;
     }
     store.patchCandidateStage(c.id, 'onboarding').then((res) => {
       if (!res.ok) { alert(res.error || 'Não foi possível validar. Tenta novamente.'); return; }
-      store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+      store.notify({ type: 'validado', candidateId: c.id, text: 'foi validado(a) pela coordenação — segue para onboarding' });
     });
   }
   const schedOf = (c) => {
@@ -365,8 +365,9 @@ function CoordEditModal({ store, onClose }) {
 }
 
 // Pop-up: mudar palavra-passe
-const SUPABASE_URL_D = 'https://mamvckyoqrjhivffimob.supabase.co';
-const SUPABASE_ANON_KEY_D = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbXZja3lvcXJqaGl2ZmZpbW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTUwNzIsImV4cCI6MjA5NzE3MTA3Mn0.ucPATa3CTsncwoElpF8_-XyZUgwGoBfpzQM4I9M2bMM';
+const dashboardAuthConfig = window.__PEDAL_AUTH_CONFIG || {};
+const SUPABASE_URL_D = dashboardAuthConfig.supabaseUrl || '';
+const SUPABASE_ANON_KEY_D = dashboardAuthConfig.supabaseAnonKey || '';
 function CoordPwModal({ store, onClose }) {
   const [pwCurrent, setPwCurrent] = useStateD('');
   const [pw, setPw] = useStateD('');
@@ -377,7 +378,7 @@ function CoordPwModal({ store, onClose }) {
 
   const save = async () => {
     if (!pwCurrent) { setErr('Introduz a palavra-passe actual.'); return; }
-    if (pw.length < 4) { setErr('A nova palavra-passe deve ter pelo menos 4 caracteres.'); return; }
+    if (pw.length < 8) { setErr('A nova palavra-passe deve ter pelo menos 8 caracteres.'); return; }
     if (pw !== pw2) { setErr('As palavras-passe não coincidem.'); return; }
     setLoading(true); setErr('');
     const email = (store.coordProfile || {}).email;
@@ -413,7 +414,7 @@ function CoordPwModal({ store, onClose }) {
             <p style={{ font: '400 12.5px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: '0 0 16px' }}>Escolhe uma nova palavra-passe para a tua conta.</p>
             <FieldLite label="Palavra-passe actual"><input className="pedal-input" type="password" value={pwCurrent} onChange={(e) => { setPwCurrent(e.target.value); setErr(''); }} placeholder="A tua password actual" autoFocus /></FieldLite>
             <div style={{ height: 10 }} />
-            <FieldLite label="Nova palavra-passe"><input className="pedal-input" type="password" value={pw} onChange={(e) => { setPw(e.target.value); setErr(''); }} placeholder="Mínimo 4 caracteres" /></FieldLite>
+            <FieldLite label="Nova palavra-passe"><input className="pedal-input" type="password" value={pw} onChange={(e) => { setPw(e.target.value); setErr(''); }} placeholder="Mínimo 8 caracteres" /></FieldLite>
             <div style={{ height: 10 }} />
             <FieldLite label="Confirmar palavra-passe"><input className="pedal-input" type="password" value={pw2} onChange={(e) => { setPw2(e.target.value); setErr(''); }} placeholder="Repete a palavra-passe" /></FieldLite>
             {err && <div style={{ font: '600 11.5px var(--ui)', color: 'var(--primary-deep)', marginTop: 8 }}>{err}</div>}
@@ -652,13 +653,13 @@ function WaitingList({ ctx }) {
   const resumeOne = (c) => {
     if (isLiveCandidate(c)) {
       store.up({ waitingListResumed: true }); store.setStage('validacao');
-      store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
+      store.notify({ type: 'retomado', candidateId: c.id, text: 'foi retomado(a) da lista de espera — aguarda validação' });
       setSel(null);
       return;
     }
     store.patchCandidateStage(c.id, 'validacao').then((res) => {
       if (!res.ok) { alert(res.error || 'Não foi possível retomar. Tenta novamente.'); return; }
-      store.notify({ type: 'retomado', who: c.name, text: 'foi retomado(a) da lista de espera — aguarda validação' });
+      store.notify({ type: 'retomado', candidateId: c.id, text: 'foi retomado(a) da lista de espera — aguarda validação' });
       setSel(null);
     });
   };
@@ -1375,7 +1376,7 @@ function SchedulingModal({ c, store, onClose }) {
       }).then(() => store.patchRealCandidate(backendId, { scheduling: schedData })).catch(() => {});
     }
     const tName = (trainers.find((t) => t.id === trainerId) || {}).name;
-    store.notify({ type: 'agendado', who: c.name, text: `recebeu ${valid.length} horário${valid.length > 1 ? 's' : ''} para a formação prática${tName ? ` · formador ${tName}` : ''}` });
+    store.notify({ type: 'agendado', candidateId: c.id, text: `recebeu ${valid.length} horário${valid.length > 1 ? 's' : ''} para a formação prática${tName ? ` · formador ${tName}` : ''}` });
     onClose();
   };
   const lbl = { font: '700 11px var(--ui)', letterSpacing: 0.4, color: 'var(--ink-soft)', textTransform: 'uppercase', margin: '18px 0 9px' };
@@ -1500,7 +1501,7 @@ function SlotReviewModal({ c, store, onClose }) {
       { id: 'cn' + Math.random().toString(36).slice(2, 7), text: '📞 Para qualquer remarcação ou desmarcação, contacta-nos por telefone para o 123456789.', shown: false },
     ];
     patchSched({ ...sc, slots: newSlots, status: 'confirmado', chatNotify: notifs });
-    store.notify({ type: 'agendado', who: c.name, text: `formação prática confirmada — ${label}` });
+    store.notify({ type: 'agendado', candidateId: c.id, text: `formação prática confirmada — ${label}` });
     setDoneAction('confirmed');
   };
 
@@ -1514,13 +1515,13 @@ function SlotReviewModal({ c, store, onClose }) {
       const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. Estamos a analisar as outras opções que escolheste.`;
       const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
       patchSched({ ...sc, slots: newSlots, chatNotify: notifs });
-      store.notify({ type: 'agendado', who: c.name, text: `recusou um dos horários escolhidos — restam outros por rever` });
+      store.notify({ type: 'agendado', candidateId: c.id, text: `recusou um dos horários escolhidos — restam outros por rever` });
       setRefusingSlot(null); setRefuseReason('');
     } else {
       const text = `😔 O horário de ${label} não foi possível confirmar. Motivo: ${refuseReason.trim()}. A equipa Pedalar Sem Idade vai contactar-te por telefone para combinarem uma data que sirva a todos.`;
       const notifs = [...(sc.chatNotify || []), { id: 'cn' + Math.random().toString(36).slice(2, 7), text, shown: false }];
       patchSched({ ...sc, slots: newSlots, status: 'aguarda_telefone', chatNotify: notifs });
-      store.notify({ type: 'agendado', who: c.name, text: `horário recusado — a equipa deve contactar o voluntário por telefone` });
+      store.notify({ type: 'agendado', candidateId: c.id, text: `horário recusado — a equipa deve contactar o voluntário por telefone` });
       setRefusingSlot(null); setRefuseReason(''); setDoneAction('refused');
     }
   };
@@ -1541,7 +1542,7 @@ function SlotReviewModal({ c, store, onClose }) {
       { id: 'cn' + Math.random().toString(36).slice(2, 7), text: msgContact, shown: false },
     ];
     patchSched({ ...sc, slots: newSlots, status: 'confirmado', trainerId: defTrainerId, stationId: defStationId, chatNotify: notifs });
-    store.notify({ type: 'agendado', who: c.name, text: `horário definitivo registado — ${label}` });
+    store.notify({ type: 'agendado', candidateId: c.id, text: `horário definitivo registado — ${label}` });
     setDoneAction('confirmed');
   };
 
@@ -1736,13 +1737,13 @@ function CandidateDetail({ c, store, onClose }) {
   function doReject() {
     if (isLiveC) {
       store.setStage('rejeitado'); store.up({ rejection: { reason } });
-      store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
+      store.notify({ type: 'rejeitado', candidateId: c.id, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
       onClose();
       return;
     }
     store.patchCandidateStage(c.id, 'rejeitado').then((res) => {
       if (!res.ok) { alert(res.error || 'Não foi possível rejeitar. Tenta novamente.'); return; }
-      store.notify({ type: 'rejeitado', who: c.name, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
+      store.notify({ type: 'rejeitado', candidateId: c.id, text: `foi rejeitado(a)${reason ? ' — ' + reason : ''}` });
       onClose();
     });
   }
@@ -1867,7 +1868,12 @@ function CandidateDetail({ c, store, onClose }) {
               <div className="pedal-transcript">
                 {transcript.map((m, i) => (
                   <div key={i} className={'pedal-tmsg ' + (m.from === 'user' ? 'user' : m.from === 'system' ? 'sys' : 'agent')}>
-                    <span className="pedal-tfrom">{m.from === 'user' ? c.name.split(' ')[0] : m.from === 'system' ? 'sistema' : 'PEDAL'}</span>
+                    <span className="pedal-tfrom">
+                      {m.coord && m.authorTrust === 'contact_request'
+                        ? `Coordenação verificada${m.coordAuthor ? ` · ${m.coordAuthor}` : ''}`
+                        : m.from === 'user' ? c.name.split(' ')[0] : m.from === 'system' ? 'sistema' : 'PEDAL'}
+                      {m.client_unverified ? ' · conteúdo do browser não verificado' : ''}
+                    </span>
                     {m.text}
                   </div>
                 ))}
@@ -1884,13 +1890,13 @@ function CandidateDetail({ c, store, onClose }) {
                 onClick={() => {
                   if (isLiveC) {
                     store.up({ pushedToWaitingList: true }); store.setStage('espera');
-                    store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
+                    store.notify({ type: 'espera', candidateId: c.id, text: 'foi colocado(a) em lista de espera pela coordenação' });
                     onClose();
                     return;
                   }
                   store.patchCandidateStage(c.id, 'espera').then((res) => {
                     if (!res.ok) { alert(res.error || 'Não foi possível colocar em lista de espera. Tenta novamente.'); return; }
-                    store.notify({ type: 'espera', who: c.name, text: 'foi colocado(a) em lista de espera pela coordenação' });
+                    store.notify({ type: 'espera', candidateId: c.id, text: 'foi colocado(a) em lista de espera pela coordenação' });
                     onClose();
                   });
                 }}>Lista de espera</button>
@@ -1899,13 +1905,13 @@ function CandidateDetail({ c, store, onClose }) {
               onClick={() => {
                 if (isLiveC) {
                   store.up({ validated: true }); store.setStage('onboarding');
-                  store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+                  store.notify({ type: 'validado', candidateId: c.id, text: 'foi validado(a) pela coordenação — segue para onboarding' });
                   onClose();
                   return;
                 }
                 store.patchCandidateStage(c.id, 'onboarding').then((res) => {
                   if (!res.ok) { alert(res.error || 'Não foi possível validar. Tenta novamente.'); return; }
-                  store.notify({ type: 'validado', who: c.name, text: 'foi validado(a) pela coordenação — segue para onboarding' });
+                  store.notify({ type: 'validado', candidateId: c.id, text: 'foi validado(a) pela coordenação — segue para onboarding' });
                   onClose();
                 });
               }}>
@@ -2006,7 +2012,7 @@ function GestaoUsers({ store }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'Erro ao criar utilizador.'); return; }
-      setCreated({ name: f.name.trim(), email: f.email.trim(), tempPassword: data.tempPassword });
+      setCreated({ name: f.name.trim(), email: f.email.trim() });
       setF({ name: '', email: '', phone: '', role: 'Administração' });
       loadUsers();
     } catch (_) { setErr('Sem ligação ao servidor.'); }
@@ -2121,13 +2127,16 @@ function GestaoUsers({ store }) {
           </div>
         ) : created ? (
           <div style={{ display: 'grid', gap: 14 }}>
-            <div style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Conta criada</div>
+            <div style={{ font: '700 15px var(--display)', color: 'var(--ink)' }}>Convite enviado</div>
             <div style={{ background: 'var(--accent-soft)', borderRadius: 10, padding: '14px 16px', display: 'grid', gap: 6 }}>
-              <div style={{ font: '500 12px var(--ui)', color: 'var(--ink-soft)' }}>Envia estas credenciais a <strong style={{ color: 'var(--ink)' }}>{created.name}</strong>:</div>
+              <div style={{ font: '500 12px/1.5 var(--ui)', color: 'var(--ink-soft)' }}>
+                Foi enviada uma ligação de uso único para <strong style={{ color: 'var(--ink)' }}>{created.name}</strong>.
+              </div>
               <div style={{ font: '500 13px var(--ui)', color: 'var(--ink)' }}>Email: <strong>{created.email}</strong></div>
-              <div style={{ font: '500 13px var(--ui)', color: 'var(--ink)' }}>Password temporária: <strong style={{ fontFamily: 'monospace', background: 'var(--line)', padding: '2px 6px', borderRadius: 4 }}>{created.tempPassword}</strong></div>
             </div>
-            <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: 0 }}>O utilizador deve alterar a password no primeiro login.</p>
+            <p style={{ font: '400 12px/1.5 var(--ui)', color: 'var(--ink-soft)', margin: 0 }}>
+              O utilizador define a própria palavra-passe através da ligação e configura a autenticação de dois fatores no primeiro acesso.
+            </p>
             <button className="pedal-btn ghost" style={{ width: '100%' }} onClick={() => setCreated(null)}>Adicionar outro</button>
           </div>
         ) : (

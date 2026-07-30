@@ -65,7 +65,7 @@ function PracticalCompleteModal({ c, store, onClose, startEditing }) {
     }
 
     patchSched({ ...sc, slots: newSlots, trainerId: editTrainerId, stationId: editStationId, chatNotify: notifs });
-    if (changed) store.notify({ type: 'agendado', who: c.name, text: `horário da formação prática atualizado` });
+    if (changed) store.notify({ type: 'agendado', candidateId: c.id, text: `horário da formação prática atualizado` });
     onClose();
   };
 
@@ -82,7 +82,7 @@ function PracticalCompleteModal({ c, store, onClose, startEditing }) {
       }).catch(() => {});
     }
     if (c.live) store.up({ rejection: null });
-    store.notify({ type: 'concluido', who: c.name, text: `concluiu a formação prática${comment ? ' — ' + comment : ''} · aguarda formalização` });
+    store.notify({ type: 'concluido', candidateId: c.id, text: `concluiu a formação prática${comment ? ' — ' + comment : ''} · aguarda formalização` });
     onClose();
   };
 
@@ -96,7 +96,7 @@ function PracticalCompleteModal({ c, store, onClose, startEditing }) {
         body: JSON.stringify({ stage: 'rejeitado' }),
       }).catch(() => {});
     }
-    store.notify({ type: 'rejeitado', who: c.name, text: `não concluiu a formação prática${comment ? ' — ' + comment : ''}` });
+    store.notify({ type: 'rejeitado', candidateId: c.id, text: `não concluiu a formação prática${comment ? ' — ' + comment : ''}` });
     onClose();
   };
 

@@ -5,6 +5,7 @@ jest.mock('../../src/db/supabase', () => {
     update: jest.fn().mockReturnThis(),
     delete: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    order: jest.fn(),
     single: jest.fn(),
   };
   return { from: jest.fn(() => chain) };
@@ -26,13 +27,14 @@ beforeEach(() => {
   chain.select.mockReturnThis();
   chain.insert.mockReturnThis();
   chain.update.mockReturnThis();
-  chain.delete.mockReturnThis();
-  chain.eq.mockReturnThis();
+    chain.delete.mockReturnThis();
+    chain.eq.mockReturnThis();
+    chain.order.mockReset();
 });
 
 describe('GET /api/stations', () => {
   it('returns stations', async () => {
-    supabase.from().select.mockResolvedValue({
+    supabase.from().order.mockResolvedValue({
       data: [{ id: 'st-1', name: 'Parque das Marinhas' }], error: null,
     });
     const res = await request(app)

@@ -16,11 +16,26 @@ const settingsRouter = require('./routes/settings');
 const authConfigRouter = require('./routes/authConfig');
 const documentsRouter = require('./routes/documents');
 const aiRouter = require('./routes/ai');
+const { publicRuntimeConfig } = require('./lib/runtimeConfig');
 
 const app = express();
-app.set('trust proxy', true); // necessário para req.ip (limite de pedidos da IA) ser o IP real por trás do proxy do Railway
+// Existe um único proxy de entrada entre o cliente e o processo no Railway.
+// req.ip ignora valores adicionais à esquerda desse único salto confiável.
+app.set('trust proxy', 1);
 app.use(cors());
+// O registo público só contém campos curtos; limita-o antes do parser global.
+app.post('/api/candidates', express.json({ limit: '32kb' }));
 app.use(express.json({ limit: '2mb' }));
+app.get('/runtime-config.js', (req, res) => {
+  const serialisedConfig = JSON.stringify(publicRuntimeConfig())
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.type('application/javascript');
+  res.send(`window.__PEDAL_AUTH_CONFIG = Object.freeze(${serialisedConfig});`);
+});
 app.use(express.static(path.join(__dirname, '..', '..')));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

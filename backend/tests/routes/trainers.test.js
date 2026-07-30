@@ -5,6 +5,7 @@ jest.mock('../../src/db/supabase', () => {
     update: jest.fn().mockReturnThis(),
     delete: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    order: jest.fn(),
     single: jest.fn(),
   };
   return { from: jest.fn(() => chain) };
@@ -24,7 +25,7 @@ beforeEach(() => { jest.clearAllMocks(); });
 
 describe('GET /api/trainers', () => {
   it('returns active trainers', async () => {
-    supabase.from().eq.mockResolvedValue({
+    supabase.from().order.mockResolvedValue({
       data: [{ id: 't-1', name: 'Ana Costa', active: true }], error: null,
     });
     const res = await request(app)

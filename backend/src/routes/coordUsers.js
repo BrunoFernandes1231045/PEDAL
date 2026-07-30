@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const supabase = require('../db/supabase');
 const { requireAuth, requireCoordinator, requireRole } = require('../middleware/auth');
@@ -13,10 +14,11 @@ const ROLE_DISPLAY = {
   coordenacao: 'Coordenação',
 };
 
-// Entropia real (crypto), não um dicionário de ~4500 combinações (PED-59).
-const crypto = require('crypto');
-function genPassword() {
-  return crypto.randomBytes(18).toString('base64url');
+function coordinatorInviteRedirectUrl() {
+  const explicitUrl = process.env.COORDINATOR_INVITE_REDIRECT_URL;
+  if (explicitUrl) return explicitUrl;
+  const publicAppUrl = process.env.PUBLIC_APP_URL?.replace(/\/$/, '');
+  return publicAppUrl ? `${publicAppUrl}/nova-palavra-passe?tipo=convite-coordenacao` : null;
 }
 
 // listUsers() só devolve 50 contas por página — com dezenas de candidatos
@@ -63,19 +65,48 @@ router.post('/', requireAuth, requireCoordinator, requireRole(['administracao'])
   if (!name || !email) return res.status(400).json({ error: 'name e email são obrigatórios' });
 
   const coordRole = ROLE_MAP[role] || 'coordenacao';
-  const tempPassword = genPassword();
+  const redirectTo = coordinatorInviteRedirectUrl();
+  if (!redirectTo) {
+    return res.status(503).json({
+      error: 'Convites não configurados. Defina PUBLIC_APP_URL ou COORDINATOR_INVITE_REDIRECT_URL.',
+    });
+  }
 
-  const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password: tempPassword,
-    user_metadata: { name, phone: phone || '' },
-    app_metadata: { role: 'coordinator', coord_role: coordRole },
-    email_confirm: true,
+  // O Supabase envia uma ligação de uso único. Não se gera, devolve nem
+  // transmite uma password temporária (PED-59).
+  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email.trim().toLowerCase(), {
+    data: { name, phone: phone || '' },
+    redirectTo,
   });
 
   if (error) return res.status(500).json({ error: error.message });
 
-  res.status(201).json({ id: data.user.id, name, email, phone, role: ROLE_DISPLAY[coordRole] || role, coordRole, tempPassword });
+  const authorizationVersion = crypto.randomUUID();
+  const { error: metadataError } = await supabase.auth.admin.updateUserById(data.user.id, {
+    app_metadata: {
+      ...(data.user.app_metadata || {}),
+      role: 'coordinator',
+      coord_role: coordRole,
+      authorization_version: authorizationVersion,
+    },
+  });
+
+  if (metadataError) {
+    // Não deixar uma conta convidada sem o papel seguro. A ligação entretanto
+    // enviada deixa de ser utilizável porque a conta é removida.
+    await supabase.auth.admin.deleteUser(data.user.id);
+    return res.status(500).json({ error: 'Não foi possível concluir a criação segura do utilizador.' });
+  }
+
+  res.status(201).json({
+    id: data.user.id,
+    name,
+    email: email.trim().toLowerCase(),
+    phone,
+    role: ROLE_DISPLAY[coordRole] || role,
+    coordRole,
+    invitationSent: true,
+  });
 });
 
 // PATCH /api/coord-users/:email — alterar função (só administracao pode)
@@ -96,10 +127,23 @@ router.patch('/:email', requireAuth, requireCoordinator, requireRole(['administr
   if (!user) return res.status(404).json({ error: 'Utilizador não encontrado' });
 
   const { error } = await supabase.auth.admin.updateUserById(user.id, {
-    app_metadata: { ...user.app_metadata, coord_role: coordRole },
+    app_metadata: {
+      ...user.app_metadata,
+      coord_role: coordRole,
+      authorization_version: crypto.randomUUID(),
+    },
   });
 
   if (error) return res.status(500).json({ error: error.message });
+
+  const { error: sessionError } = await supabase.rpc('invalidate_user_auth_sessions', {
+    target_user_id: user.id,
+  });
+  if (sessionError) {
+    return res.status(500).json({
+      error: 'A função foi alterada, mas não foi possível terminar as sessões existentes. O utilizador deve iniciar sessão novamente.',
+    });
+  }
 
   res.json({ id: user.id, email, coordRole, role: ROLE_DISPLAY[coordRole] });
 });
