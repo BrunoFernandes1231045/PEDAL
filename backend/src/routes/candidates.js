@@ -127,6 +127,14 @@ router.post('/', async (req, res) => {
     return res.status(503).json({ error: 'Não foi possível validar o registo. Tenta novamente mais tarde.' });
   }
   if (!turnstile.success) {
+    console.error('[candidates] Turnstile falhou:', JSON.stringify({
+      errorCodes: turnstile.errorCodes,
+      bindingError: turnstile.bindingError,
+      hostname: turnstile.hostname,
+      action: turnstile.action,
+      expectedAction: security.expectedAction,
+      expectedHostnames: security.expectedHostnames,
+    }));
     return res.status(400).json({ error: 'A validação anti-robô falhou. Atualiza a página e tenta novamente.' });
   }
 
