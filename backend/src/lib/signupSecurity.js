@@ -62,7 +62,10 @@ function signupSecurityConfig(env = process.env) {
   return {
     siteKey,
     secretKey,
-    expectedAction: 'signup',
+    // As chaves de teste oficiais do Turnstile devolvem uma resposta fixa sem
+    // `action`, pelo que exigi-la fecharia sempre o registo em desenvolvimento.
+    // Mesmo critério de expectedHostnames: a ligação só é imposta em produção.
+    expectedAction: production ? 'signup' : null,
     expectedHostnames,
     preRateLimit: positiveInteger(env, 'SIGNUP_PRE_RATE_LIMIT', 30, { max: 10000 }),
     preRateWindowSeconds: positiveInteger(env, 'SIGNUP_PRE_RATE_WINDOW_SECONDS', 60),

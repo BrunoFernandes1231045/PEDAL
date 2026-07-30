@@ -227,7 +227,7 @@ describe('POST /api/candidates', () => {
     expect(JSON.stringify([preArgs, signupArgs])).not.toContain('203.0.113.10');
     expect(JSON.stringify([preArgs, signupArgs])).not.toContain('maria@test.com');
     expect(verifyTurnstile).toHaveBeenCalledWith(expect.objectContaining({
-      expectedAction: 'signup',
+      expectedAction: null, // só é imposto em produção
       secretKey: 'test-secret',
     }));
   });

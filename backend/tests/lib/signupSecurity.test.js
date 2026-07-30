@@ -50,6 +50,18 @@ describe('signupSecurityConfig', () => {
     })).toThrow(/teste do Turnstile/);
   });
 
+  it('only binds the action in production, so the official test keys work in development', () => {
+    expect(signupSecurityConfig({
+      ...productionEnv,
+      NODE_ENV: 'development',
+      TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
+      TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+    })).toEqual(expect.objectContaining({
+      expectedAction: null,
+      expectedHostnames: [],
+    }));
+  });
+
   it('requires HTTPS and a hostname binding in production', () => {
     expect(() => signupSecurityConfig({
       ...productionEnv,
