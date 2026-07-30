@@ -477,6 +477,16 @@ function CoordLoginScreen({ store }) {
     return data;
   };
 
+  // A flag vive no backend (COORDINATOR_MFA_REQUIRED, exposta em
+  // /api/auth-config) porque não há bundler que injete env vars no cliente.
+  // Se a leitura falhar assume-se MFA ativo: pedir um código a mais é
+  // recuperável, saltá-lo quando o backend o exige devolveria 403
+  // (`mfa_required`) em todas as rotas de coordenação depois do login.
+  const fetchCoordinatorMfaEnabled = () => fetch('/api/auth-config')
+    .then((r) => r.json())
+    .then((cfg) => cfg.coordinatorMfaEnabled !== false)
+    .catch(() => true);
+
   const finishCoordinatorLogin = (session, fallbackUser) => {
     const user = session.user || fallbackUser;
     const meta = user?.user_metadata || {};
@@ -507,6 +517,15 @@ function CoordLoginScreen({ store }) {
       const appMeta = data.user?.app_metadata || {};
       if (appMeta.role !== 'coordinator') { setErr('Esta conta não tem acesso à coordenação'); return; }
       setPw('');
+
+      if (!(await fetchCoordinatorMfaEnabled())) {
+        // Contas que já tinham TOTP configurado entram igualmente: a sessão
+        // fica em AAL1 e o backend, com a flag desligada, aceita-a. O fator
+        // continua registado no Supabase e volta a ser pedido se a flag for
+        // reativada, sem precisar de nova configuração.
+        finishCoordinatorLogin(data, data.user);
+        return;
+      }
 
       const verifiedFactor = (data.user?.factors || []).find((factor) => factor.factor_type === 'totp' && factor.status === 'verified');
       if (verifiedFactor) {

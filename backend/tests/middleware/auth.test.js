@@ -18,6 +18,13 @@ function fakeJwt(claims) {
 }
 
 describe('requireAuth', () => {
+  const originalMfaSetting = process.env.COORDINATOR_MFA_REQUIRED;
+
+  afterEach(() => {
+    if (originalMfaSetting === undefined) delete process.env.COORDINATOR_MFA_REQUIRED;
+    else process.env.COORDINATOR_MFA_REQUIRED = originalMfaSetting;
+  });
+
   it('returns 401 when no Authorization header', async () => {
     const req = { headers: {} };
     const res = mockRes();
@@ -97,6 +104,7 @@ describe('requireAuth', () => {
   });
 
   it('rejects an AAL1 coordinator even on a mixed candidate/coordinator route', async () => {
+    process.env.COORDINATOR_MFA_REQUIRED = 'true';
     supabase.auth.getUser.mockResolvedValue({
       data: {
         user: {
@@ -113,6 +121,25 @@ describe('requireAuth', () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'mfa_required' }));
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('lets an AAL1 coordinator through when the MFA flag is off', async () => {
+    delete process.env.COORDINATOR_MFA_REQUIRED;
+    supabase.auth.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: 'coord-1',
+          app_metadata: { role: 'coordinator', coord_role: 'coordenacao' },
+        },
+      },
+      error: null,
+    });
+    const req = { headers: { authorization: `Bearer ${fakeJwt({ iat: 200, aal: 'aal1' })}` } };
+    const res = mockRes();
+    const next = jest.fn();
+    await requireAuth(req, res, next);
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it('accepts an AAL2 coordinator only when the JWT carries the current authorization version', async () => {
@@ -169,7 +196,8 @@ describe('requireCoordinator', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('requires AAL2 when user is coordinator', () => {
+  it('requires AAL2 when user is coordinator and the MFA flag is on', () => {
+    process.env.COORDINATOR_MFA_REQUIRED = 'true';
     const req = { user: { id: 'u1', role: 'coordinator' }, authAal: 'aal1' };
     const res = mockRes();
     const next = jest.fn();
@@ -180,6 +208,7 @@ describe('requireCoordinator', () => {
   });
 
   it('calls next when coordinator has an AAL2 session', () => {
+    process.env.COORDINATOR_MFA_REQUIRED = 'true';
     const req = { user: { id: 'u1', role: 'coordinator' }, authAal: 'aal2' };
     const res = mockRes();
     const next = jest.fn();
@@ -187,9 +216,28 @@ describe('requireCoordinator', () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it('allows the MFA check to be disabled explicitly in tests', () => {
-    process.env.NODE_ENV = 'test';
-    process.env.COORDINATOR_MFA_REQUIRED = 'false';
+  // A flag é opt-in: qualquer valor que não seja exatamente 'true' deixa a
+  // exigência desligada, incluindo quando a variável não está definida.
+  it.each([
+    ['unset', undefined],
+    ['false', 'false'],
+    ['empty', ''],
+  ])('skips the MFA check when COORDINATOR_MFA_REQUIRED is %s', (_label, value) => {
+    if (value === undefined) delete process.env.COORDINATOR_MFA_REQUIRED;
+    else process.env.COORDINATOR_MFA_REQUIRED = value;
+    const req = { user: { id: 'u1', role: 'coordinator' }, authAal: 'aal1' };
+    const res = mockRes();
+    const next = jest.fn();
+    requireCoordinator(req, res, next);
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  // Ao contrário do comportamento anterior, produção deixou de forçar MFA por
+  // si só — passou a depender exclusivamente da flag, nos dois sentidos.
+  it('leaves the MFA check off in production when the flag is off', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.COORDINATOR_MFA_REQUIRED;
     const req = { user: { id: 'u1', role: 'coordinator' }, authAal: 'aal1' };
     const res = mockRes();
     const next = jest.fn();
@@ -197,9 +245,9 @@ describe('requireCoordinator', () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it('never allows the MFA check to be disabled in production', () => {
+  it('enforces the MFA check in production when the flag is on', () => {
     process.env.NODE_ENV = 'production';
-    process.env.COORDINATOR_MFA_REQUIRED = 'false';
+    process.env.COORDINATOR_MFA_REQUIRED = 'true';
     const req = { user: { id: 'u1', role: 'coordinator' }, authAal: 'aal1' };
     const res = mockRes();
     const next = jest.fn();

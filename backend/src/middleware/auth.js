@@ -10,11 +10,14 @@ function decodeJwtPayload(token) {
   }
 }
 
+// Feature flag, desligada por omissão em todos os ambientes (incluindo
+// produção) e aplicada apenas com COORDINATOR_MFA_REQUIRED=true — o mesmo
+// padrão opt-in de PASSWORD_RECOVERY_EMAIL_ENABLED em routes/authConfig.js.
+// Com a flag desligada, uma password de coordenador comprometida basta para
+// acesso às fichas completas dos candidatos (NIF, CC, morada, assinatura);
+// para reativar, define COORDINATOR_MFA_REQUIRED=true no ambiente.
 function coordinatorMfaRequired() {
-  // Produção nunca pode desativar MFA por engano através de configuração.
-  // O bypass explícito existe apenas para desenvolvimento/testes locais.
-  return process.env.NODE_ENV === 'production'
-    || process.env.COORDINATOR_MFA_REQUIRED !== 'false';
+  return process.env.COORDINATOR_MFA_REQUIRED === 'true';
 }
 
 async function requireAuth(req, res, next) {
